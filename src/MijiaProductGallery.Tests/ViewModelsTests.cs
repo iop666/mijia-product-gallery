@@ -1,6 +1,7 @@
 using MijiaProductGallery.Core.Enums;
 using MijiaProductGallery.Core.Interfaces;
 using MijiaProductGallery.Core.Models;
+using MijiaProductGallery.Core.Query;
 using MijiaProductGallery.Infrastructure.Database;
 using MijiaProductGallery.Infrastructure.Database.Repositories;
 using MijiaProductGallery.Infrastructure.Images;
@@ -57,8 +58,9 @@ public sealed class GalleryViewModelTests : IAsyncLifetime
         Assert.Equal(GalleryLoadState.Ready, vm.State);
         Assert.Equal(2, vm.Cards.Count);
         Assert.True(vm.IsReadyVisible);
-        Assert.True(vm.Cards[0].HasImage);
-        Assert.False(vm.Cards[1].HasImage);
+        // 默认按型号排序：ows 排在前（无图），zhimi 在后（有图）。
+        Assert.False(vm.Cards[0].HasImage);
+        Assert.True(vm.Cards[1].HasImage);
     }
 
     [Fact]
@@ -84,17 +86,22 @@ public sealed class GalleryViewModelTests : IAsyncLifetime
         Assert.NotNull(vm.ErrorMessage);
     }
 
-    private GalleryViewModel CreateViewModel(
-        IProductRepository? repository = null,
-        ISearchService? search = null)
+    private GalleryViewModel CreateViewModel(IProductRepository? repository = null)
     {
         return new GalleryViewModel(
             repository ?? new ProductRepository(host.CreateContext()),
             NewQueue(),
-            search ?? new StubSearchService([]),
+            CreateQueryService(),
             new SearchHistoryRepository(host.CreateContext()),
+            new InMemorySettings(),
             InlineUiDispatcher.Instance,
             debounceMilliseconds: 10);
+    }
+
+    private ProductQueryService CreateQueryService()
+    {
+        var factory = new TestDbContextFactory(() => host.CreateContext());
+        return new ProductQueryService(factory, new FilterService());
     }
 
     private ThumbnailLoadQueue NewQueue()
@@ -119,6 +126,10 @@ public sealed class GalleryViewModelTests : IAsyncLifetime
         {
             throw new InvalidOperationException("模拟数据库读取失败");
         }
+
+        public Task<IReadOnlyList<string>> GetCategoriesAsync(CancellationToken cancellationToken = default) => throw new NotSupportedException();
+
+        public Task<IReadOnlyList<string>> GetBrandsAsync(CancellationToken cancellationToken = default) => throw new NotSupportedException();
 
         public Task AddAsync(Product product, CancellationToken cancellationToken = default) => throw new NotSupportedException();
 

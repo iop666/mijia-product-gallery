@@ -13,38 +13,102 @@
         </DataTemplate>
     </Page.Resources>
 
-    <Grid RowSpacing="4">
-        <Grid.RowDefinitions>
-            <RowDefinition Height="Auto" />
-            <RowDefinition Height="*" />
-        </Grid.RowDefinitions>
-        <TextBlock
-            Text="{x:Bind Vm.ResultSummary, Mode=OneWay}"
-            FontSize="12.5"
-            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-            Margin="12,8,0,0"
-            Visibility="{x:Bind local:UiConverters.ToVisibility(Vm.HasResultSummary), Mode=OneWay}" />
-        <ScrollViewer
-            Grid.Row="1"
-            x:Name="CardsScroll"
-            Visibility="{x:Bind local:UiConverters.ToVisibility(Vm.IsReadyVisible), Mode=OneWay}">
-            <ItemsRepeater
-                x:Name="CardsRepeater"
-                ItemsSource="{x:Bind Vm.Cards}"
-                ItemTemplate="{StaticResource ProductCardTemplate}">
-                <ItemsRepeater.Layout>
-                    <UniformGridLayout
-                        MinItemWidth="172"
-                        MinItemHeight="204"
-                        MinRowSpacing="6"
-                        MinColumnSpacing="6"
-                        ItemsJustification="Start" />
-                </ItemsRepeater.Layout>
-            </ItemsRepeater>
-        </ScrollViewer>
+    <Grid>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="*" />
+            <ColumnDefinition Width="Auto" />
+        </Grid.ColumnDefinitions>
+        <Grid Grid.Column="0" RowSpacing="4">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+            </Grid.RowDefinitions>
+            <Grid Grid.Row="0" ColumnSpacing="8" Margin="12,8,12,0">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <TextBlock
+                    Text="{Binding ResultSummary, Mode=OneWay}"
+                    FontSize="12.5"
+                    VerticalAlignment="Center"
+                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                    Visibility="{Binding HasResultSummary, Mode=OneWay, Converter={StaticResource BoolToVisibility}}" />
+                <Button Grid.Column="1" Click="OnFilterToggleClick">
+                    <StackPanel Orientation="Horizontal" Spacing="6">
+                        <FontIcon Glyph="&#xE71C;" FontSize="14" />
+                        <TextBlock Text="筛选" />
+                    </StackPanel>
+                </Button>
+                <Button
+                    Grid.Column="2"
+                    Content="清除全部"
+                    Visibility="{Binding HasActiveChips, Mode=OneWay, Converter={StaticResource BoolToVisibility}}"
+                    Click="OnClearFiltersClick" />
+            </Grid>
+            <ItemsControl
+                Grid.Row="1"
+                ItemsSource="{Binding ActiveChips, Mode=OneWay}"
+                Margin="12,0,0,0"
+                Visibility="{Binding HasActiveChips, Mode=OneWay, Converter={StaticResource BoolToVisibility}}">
+                <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate>
+                        <StackPanel Orientation="Horizontal" Spacing="6" />
+                    </ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                        <Border
+                            Background="{ThemeResource AccentFillColorDefaultBrush}"
+                            CornerRadius="10"
+                            Padding="10,3">
+                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                <TextBlock
+                                    Text="{Binding Label}"
+                                    FontSize="11.5"
+                                    Foreground="{ThemeResource TextOnAccentFillColorPrimaryBrush}" />
+                                <Button
+                                    Content="&#xE711;"
+                                    FontFamily="{ThemeResource SymbolThemeFontFamily}"
+                                    FontSize="10"
+                                    Padding="2,0"
+                                    MinWidth="0"
+                                    MinHeight="0"
+                                    Background="Transparent"
+                                    BorderThickness="0"
+                                    Foreground="{ThemeResource TextOnAccentFillColorPrimaryBrush}"
+                                    Tag="{Binding Id}"
+                                    Click="OnChipRemoveClick" />
+                            </StackPanel>
+                        </Border>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+            <ScrollViewer
+                Grid.Row="2"
+                x:Name="CardsScroll"
+                Visibility="{x:Bind local:UiConverters.ToVisibility(Vm.IsReadyVisible), Mode=OneWay}">
+                <ItemsRepeater
+                    x:Name="CardsRepeater"
+                    ItemsSource="{x:Bind Vm.Cards}"
+                    ItemTemplate="{StaticResource ProductCardTemplate}">
+                    <ItemsRepeater.Layout>
+                        <UniformGridLayout
+                            MinItemWidth="172"
+                            MinItemHeight="204"
+                            MinRowSpacing="6"
+                            MinColumnSpacing="6"
+                            ItemsJustification="Start" />
+                    </ItemsRepeater.Layout>
+                </ItemsRepeater>
+            </ScrollViewer>
+        </Grid>
 
         <StackPanel
-            Grid.Row="1"
+            Grid.Column="0"
+            Grid.Row="0"
             HorizontalAlignment="Center"
             VerticalAlignment="Center"
             Spacing="12"
@@ -54,7 +118,7 @@
         </StackPanel>
 
         <StackPanel
-            Grid.Row="1"
+            Grid.Column="0"
             HorizontalAlignment="Center"
             VerticalAlignment="Center"
             Spacing="8"
@@ -68,7 +132,7 @@
         </StackPanel>
 
         <StackPanel
-            Grid.Row="1"
+            Grid.Column="0"
             HorizontalAlignment="Center"
             VerticalAlignment="Center"
             Spacing="8"
@@ -85,7 +149,7 @@
         </StackPanel>
 
         <InfoBar
-            Grid.Row="1"
+            Grid.Column="0"
             x:Name="NoticeBar"
             IsOpen="False"
             IsClosable="True"
@@ -94,5 +158,94 @@
             HorizontalAlignment="Center"
             VerticalAlignment="Bottom"
             Margin="0,0,0,24" />
+
+        <Border
+            Grid.Column="1"
+            x:Name="FilterPaneBorder"
+            Width="320"
+            BorderThickness="1,0,0,0"
+            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+            Background="{ThemeResource LayerFillColorDefaultBrush}"
+            Visibility="{Binding FilterPane.IsOpen, Mode=OneWay, Converter={StaticResource BoolToVisibility}}">
+            <ScrollViewer Padding="16,12">
+                <StackPanel Spacing="14" DataContext="{Binding FilterPane}">
+                    <Grid>
+                        <TextBlock Text="筛选" FontSize="16" FontWeight="SemiBold" />
+                        <Button
+                            Content="&#xE711;"
+                            FontFamily="{ThemeResource SymbolThemeFontFamily}"
+                            FontSize="11"
+                            Padding="4,2"
+                            MinWidth="0"
+                            MinHeight="0"
+                            Background="Transparent"
+                            BorderThickness="0"
+                            HorizontalAlignment="Right"
+                            Click="OnFilterToggleClick" />
+                    </Grid>
+
+                    <StackPanel Spacing="6">
+                        <TextBlock Text="大类" FontSize="13" FontWeight="SemiBold" />
+                        <ItemsControl ItemsSource="{Binding Categories}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <CheckBox Content="{Binding Label}" IsChecked="{Binding IsSelected, Mode=TwoWay}" />
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </StackPanel>
+
+                    <StackPanel Spacing="6">
+                        <TextBlock Text="品牌" FontSize="13" FontWeight="SemiBold" />
+                        <ScrollViewer MaxHeight="180">
+                            <ItemsControl ItemsSource="{Binding Brands}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <CheckBox Content="{Binding Label}" IsChecked="{Binding IsSelected, Mode=TwoWay}" />
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </ScrollViewer>
+                    </StackPanel>
+
+                    <StackPanel Spacing="6">
+                        <TextBlock Text="状态" FontSize="13" FontWeight="SemiBold" />
+                        <ComboBox MinWidth="160" SelectedIndex="0" SelectionChanged="OnAvailabilitySelectionChanged">
+                            <ComboBoxItem Content="全部" />
+                            <ComboBoxItem Content="在售" />
+                            <ComboBoxItem Content="已下架" />
+                        </ComboBox>
+                    </StackPanel>
+
+                    <StackPanel Spacing="6">
+                        <TextBlock Text="图片" FontSize="13" FontWeight="SemiBold" />
+                        <ComboBox MinWidth="160" SelectedIndex="0" SelectionChanged="OnImageSelectionChanged">
+                            <ComboBoxItem Content="全部" />
+                            <ComboBoxItem Content="有图片" />
+                            <ComboBoxItem Content="无图片" />
+                        </ComboBox>
+                    </StackPanel>
+
+                    <StackPanel Spacing="6">
+                        <TextBlock Text="使用次数" FontSize="13" FontWeight="SemiBold" />
+                        <ComboBox MinWidth="160" SelectedIndex="0" SelectionChanged="OnUsageSelectionChanged">
+                            <ComboBoxItem Content="全部" />
+                            <ComboBoxItem Content="从未使用" />
+                            <ComboBoxItem Content="已使用" />
+                            <ComboBoxItem Content="高频使用" />
+                        </ComboBox>
+                    </StackPanel>
+
+                    <StackPanel Spacing="6">
+                        <TextBlock Text="更新时间" FontSize="13" FontWeight="SemiBold" />
+                        <ComboBox MinWidth="160" SelectedIndex="0" SelectionChanged="OnDateSelectionChanged">
+                            <ComboBoxItem Content="全部" />
+                            <ComboBoxItem Content="最近 7 天" />
+                            <ComboBoxItem Content="最近 30 天" />
+                        </ComboBox>
+                    </StackPanel>
+                </StackPanel>
+            </ScrollViewer>
+        </Border>
     </Grid>
 </Page>

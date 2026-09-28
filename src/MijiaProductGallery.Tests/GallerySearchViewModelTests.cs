@@ -1,5 +1,6 @@
 using MijiaProductGallery.Core.Interfaces;
 using MijiaProductGallery.Core.Models;
+using MijiaProductGallery.Core.Query;
 using MijiaProductGallery.Infrastructure.Database;
 using MijiaProductGallery.Infrastructure.Database.Repositories;
 using MijiaProductGallery.Infrastructure.Images;
@@ -14,6 +15,12 @@ namespace MijiaProductGallery.Tests;
 public sealed class GallerySearchViewModelTests : IAsyncLifetime
 {
     private readonly DatabaseTestHost host = DatabaseTestHost.CreateNotInitialized();
+    private readonly Xunit.Abstractions.ITestOutputHelper output;
+
+    public GallerySearchViewModelTests(Xunit.Abstractions.ITestOutputHelper testOutputHelper)
+    {
+        output = testOutputHelper;
+    }
 
     public async Task InitializeAsync()
     {
@@ -55,14 +62,16 @@ public sealed class GallerySearchViewModelTests : IAsyncLifetime
 
     private GalleryViewModel CreateViewModel(IProductRepository? repository = null, int debounceMilliseconds = 10)
     {
+        var factory = new TestDbContextFactory(() => host.CreateContext());
         return new GalleryViewModel(
             repository ?? new ProductRepository(host.CreateContext()),
             new ThumbnailLoadQueue(
-                host2Service(),
+                new ThumbnailService(host.Paths),
                 InlineUiDispatcher.Instance,
                 concurrency: 1),
-            new SearchService(host.CreateContext()),
+            new ProductQueryService(factory, new FilterService()),
             new SearchHistoryRepository(host.CreateContext()),
+            new InMemorySettings(),
             InlineUiDispatcher.Instance,
             debounceMilliseconds);
     }
@@ -189,6 +198,10 @@ public sealed class GallerySearchViewModelTests : IAsyncLifetime
         {
             throw new InvalidOperationException("模拟数据库读取失败");
         }
+
+        public Task<IReadOnlyList<string>> GetCategoriesAsync(CancellationToken cancellationToken = default) => throw new NotSupportedException();
+
+        public Task<IReadOnlyList<string>> GetBrandsAsync(CancellationToken cancellationToken = default) => throw new NotSupportedException();
 
         public Task AddAsync(Product product, CancellationToken cancellationToken = default) => throw new NotSupportedException();
 

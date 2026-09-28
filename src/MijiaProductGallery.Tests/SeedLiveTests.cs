@@ -2,6 +2,7 @@ using System.Globalization;
 using Microsoft.EntityFrameworkCore;
 using MijiaProductGallery.Core.Models;
 using MijiaProductGallery.Infrastructure.Database;
+using MijiaProductGallery.Core.Query;
 using MijiaProductGallery.Infrastructure.Database.Repositories;
 using MijiaProductGallery.Infrastructure.Seed;
 using MijiaProductGallery.SeedPackTool;
@@ -96,6 +97,48 @@ public sealed class SeedLiveTests
                 Assert.NotEmpty(found);
                 Assert.True(stopwatch.ElapsedMilliseconds < 100, $"搜索 {keyword} 耗时 {stopwatch.ElapsedMilliseconds}ms 超过 100ms");
             }
+
+            // 筛选四验收场景：空气+环境电器、小米+有图片、已下架、无图片型号。
+            var queryServiceInstance = new ProductQueryService(
+                new TestDbContextFactory(() => host.CreateContext()),
+                new FilterService());
+
+            var airEnv = await queryServiceInstance.QueryAsync(new ProductQuery
+            {
+                Keyword = "空气",
+                Filter = new ProductFilter { Categories = ["环境电器"] },
+            });
+            output.WriteLine($"[filter] 空气+环境电器 → {airEnv.Count}");
+            Assert.NotEmpty(airEnv);
+            Assert.All(airEnv, product => Assert.Equal("环境电器", product.Category));
+
+            var xiaomiWithImage = await queryServiceInstance.QueryAsync(new ProductQuery
+            {
+                Keyword = "小米",
+                Filter = new ProductFilter { Brands = ["小米出品"], HasImage = true },
+            });
+            output.WriteLine($"[filter] 小米出品+有图片 → {xiaomiWithImage.Count}");
+            Assert.NotEmpty(xiaomiWithImage);
+            Assert.All(xiaomiWithImage, product =>
+            {
+                Assert.Equal("小米出品", product.Brand);
+                Assert.NotNull(product.Sha256);
+            });
+
+            var delisted = await queryServiceInstance.QueryAsync(new ProductQuery
+            {
+                Filter = new ProductFilter { IsAvailable = false },
+            });
+            output.WriteLine($"[filter] 已下架 → {delisted.Count}");
+            Assert.Equal(14, delisted.Count);
+
+            var noImageList = await queryServiceInstance.QueryAsync(new ProductQuery
+            {
+                Filter = new ProductFilter { HasImage = false },
+            });
+            output.WriteLine($"[filter] 无图片型号 → {noImageList.Count}");
+            Assert.Equal(3, noImageList.Count);
+            Assert.All(noImageList, product => Assert.Null(product.Sha256));
         }
         finally
         {

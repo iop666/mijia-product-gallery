@@ -22,6 +22,8 @@ public static class ServiceCollectionExtensions
         services.AddDbContextFactory<GalleryDbContext>(options => options.UseSqlite($"Data Source={paths.DatabaseFile}"));
         services.AddScoped<DbInitializer>();
         services.AddSingleton<IImageStore, ImageStore>();
+        services.AddSingleton<IFilterService, FilterService>();
+        services.AddSingleton<IProductQueryService, ProductQueryService>();
         services.AddSingleton<IThumbnailService, ThumbnailService>();
         services.AddSingleton<IBaikeApiClient, BaikeApiClient>();
         services.AddSingleton<IImageDownloader, ImageDownloader>();

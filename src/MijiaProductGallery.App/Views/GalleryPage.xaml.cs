@@ -2,6 +2,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using MijiaProductGallery.Core.Enums;
+using MijiaProductGallery.Core.Query;
 using MijiaProductGallery.App.Controls;
 using MijiaProductGallery.Core.Interfaces;
 using MijiaProductGallery.ViewModels;
@@ -14,11 +15,11 @@ namespace MijiaProductGallery.App.Views;
 /// </summary>
 public sealed partial class GalleryPage : Page
 {
-    private readonly GalleryViewModel vm;
+    private GalleryViewModel? vm;
     private readonly CardActionService cardActions;
     private readonly IUsageService usage;
 
-    public GalleryViewModel Vm => vm;
+    public GalleryViewModel Vm => vm ?? throw new InvalidOperationException("图库视图模型尚未初始化");
 
     public GalleryPage(GalleryViewModel viewModel)
     {
@@ -33,6 +34,11 @@ public sealed partial class GalleryPage : Page
     /// <summary>导航回图库时刷新数据（首次导入完成等场景）。</summary>
     public void ActivateView()
     {
+        if (vm is null)
+        {
+            return;
+        }
+
         if (vm.State is GalleryLoadState.Empty or GalleryLoadState.Error)
         {
             _ = vm.LoadAsync();
@@ -41,6 +47,11 @@ public sealed partial class GalleryPage : Page
 
     private async void OnLoaded(object sender, RoutedEventArgs e)
     {
+        if (vm is null)
+        {
+            return;
+        }
+
         if (vm.State == GalleryLoadState.Loading && vm.Cards.Count == 0)
         {
             await vm.LoadAsync();
@@ -143,6 +154,95 @@ public sealed partial class GalleryPage : Page
 
     private async void OnRetryClick(object sender, RoutedEventArgs e)
     {
+        if (vm is null)
+        {
+            return;
+        }
+
         await vm.LoadAsync();
+    }
+
+    private void OnFilterToggleClick(object sender, RoutedEventArgs e)
+    {
+        if (vm is null)
+        {
+            return;
+        }
+
+        vm.FilterPane.IsOpen = !vm.FilterPane.IsOpen;
+    }
+
+    private void OnClearFiltersClick(object sender, RoutedEventArgs e)
+    {
+        vm?.ClearAllFilters();
+    }
+
+    private void OnChipRemoveClick(object sender, RoutedEventArgs e)
+    {
+        if (sender is Microsoft.UI.Xaml.Controls.Button { Tag: string chipId })
+        {
+            vm?.RemoveChip(chipId);
+        }
+    }
+
+    private void OnAvailabilitySelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (vm is null)
+        {
+            return;
+        }
+
+        vm.FilterPane.Availability = ((ComboBox)sender).SelectedIndex switch
+        {
+            1 => AvailabilityOption.AvailableOnly,
+            2 => AvailabilityOption.DelistedOnly,
+            _ => AvailabilityOption.All,
+        };
+    }
+
+    private void OnImageSelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (vm is null)
+        {
+            return;
+        }
+
+        vm.FilterPane.ImageOptionValue = ((ComboBox)sender).SelectedIndex switch
+        {
+            1 => ImageOption.WithImage,
+            2 => ImageOption.WithoutImage,
+            _ => ImageOption.All,
+        };
+    }
+
+    private void OnUsageSelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (vm is null)
+        {
+            return;
+        }
+
+        vm.FilterPane.Usage = ((ComboBox)sender).SelectedIndex switch
+        {
+            1 => UsageRange.NeverUsed,
+            2 => UsageRange.Used,
+            3 => UsageRange.HighUsage,
+            _ => UsageRange.None,
+        };
+    }
+
+    private void OnDateSelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (vm is null)
+        {
+            return;
+        }
+
+        vm.FilterPane.UpdateRange = ((ComboBox)sender).SelectedIndex switch
+        {
+            1 => DateRange.Last7Days,
+            2 => DateRange.Last30Days,
+            _ => DateRange.All,
+        };
     }
 }

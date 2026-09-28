@@ -16,6 +16,12 @@ public interface IProductRepository
     /// <summary>全部产品（同步引擎构建本地快照用）。</summary>
     Task<IReadOnlyList<Product>> GetAllAsync(CancellationToken cancellationToken = default);
 
+    /// <summary>全部大类名（去重，按名称排序）。</summary>
+    Task<IReadOnlyList<string>> GetCategoriesAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>全部品牌名（去重，按名称排序）。</summary>
+    Task<IReadOnlyList<string>> GetBrandsAsync(CancellationToken cancellationToken = default);
+
     Task AddAsync(Product product, CancellationToken cancellationToken = default);
 
     Task AddRangeAsync(IReadOnlyList<Product> products, CancellationToken cancellationToken = default);

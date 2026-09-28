@@ -1,7 +1,9 @@
 using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
 using MijiaProductGallery.Core.Interfaces;
 using MijiaProductGallery.Core.Models;
+using MijiaProductGallery.Core.Query;
 
 namespace MijiaProductGallery.ViewModels;
 
@@ -21,40 +23,52 @@ public enum GalleryLoadState
     Error,
 }
 
+/// <summary>筛选 Chip：一个激活的筛选条件（含搜索关键字）。</summary>
+public sealed record FilterChip(string Id, string Label);
+
 /// <summary>
-/// 图库页视图模型：全部产品或按关键字搜索（500ms 防抖、过期结果丢弃），
-/// 一次读取轻量产品行，展示交给虚拟化布局，图片按视口按需经队列加载。
-/// 搜索只是图库的查询入口：不修改官方数据；搜索历史为用户数据。
+/// 图库页视图模型：搜索关键字 ∩ 筛选条件的组合查询（500ms 防抖、过期结果丢弃），
+/// 全部过滤在数据库侧执行；卡片集合替换经 UI 调度器回投。
+/// 搜索与筛选均为查询入口，不修改官方数据；历史与筛选状态为用户数据。
 /// </summary>
 public partial class GalleryViewModel : ObservableObject
 {
     private readonly IProductRepository products;
-    private readonly ISearchService search;
+    private readonly IProductQueryService queryService;
     private readonly ISearchHistoryRepository searchHistory;
     private readonly ThumbnailLoadQueue thumbnailQueue;
     private readonly IUiDispatcher uiDispatcher;
     private readonly int debounceMilliseconds;
     private int searchGeneration;
+    private bool optionsLoaded;
 
     public GalleryViewModel(
         IProductRepository products,
         ThumbnailLoadQueue thumbnailQueue,
-        ISearchService search,
+        IProductQueryService queryService,
         ISearchHistoryRepository searchHistory,
+        ISettingsRepository settings,
         IUiDispatcher uiDispatcher,
         int debounceMilliseconds = 500)
     {
         this.products = products;
         this.thumbnailQueue = thumbnailQueue;
-        this.search = search;
+        this.queryService = queryService;
         this.searchHistory = searchHistory;
+        settingsRepository = settings;
         this.uiDispatcher = uiDispatcher;
         this.debounceMilliseconds = debounceMilliseconds;
+        FilterPane = new FilterPaneViewModel(settings);
+        FilterPane.FilterChanged += OnFilterChanged;
     }
+
+    public FilterPaneViewModel FilterPane { get; }
 
     public ThumbnailLoadQueue Thumbnails => thumbnailQueue;
 
     public ObservableCollection<ProductCard> Cards { get; } = [];
+
+    public ObservableCollection<FilterChip> ActiveChips { get; } = [];
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsLoadingVisible), nameof(IsEmptyVisible), nameof(IsErrorVisible), nameof(IsReadyVisible))]
@@ -65,14 +79,13 @@ public partial class GalleryViewModel : ObservableObject
 
     /// <summary>结果摘要（如"空气 · 找到 32 个产品"），全量时为"共 N 个产品"。</summary>
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(HasResultSummary))]
     private string? resultSummary;
-
-    /// <summary>是否有结果摘要可显示。</summary>
-    public bool HasResultSummary => !string.IsNullOrEmpty(ResultSummary);
 
     [ObservableProperty]
     private string? searchText;
+
+    /// <summary>是否有任何激活的筛选（含关键字）。</summary>
+    public bool HasActiveChips => ActiveChips.Count > 0;
 
     public bool IsLoadingVisible => State == GalleryLoadState.Loading;
 
@@ -82,12 +95,33 @@ public partial class GalleryViewModel : ObservableObject
 
     public bool IsReadyVisible => State == GalleryLoadState.Ready;
 
-    /// <summary>页面入口：按当前关键字加载（空关键字=全部）。</summary>
-    public Task LoadAsync(CancellationToken cancellationToken = default)
+    /// <summary>页面入口：加载可选项（一次）并按当前关键字与筛选执行查询。</summary>
+    public async Task LoadAsync(CancellationToken cancellationToken = default)
     {
+        try
+        {
+            if (!optionsLoaded)
+            {
+                optionsLoaded = true;
+                await FilterPane.LoadAsync(products, settingsRepository, cancellationToken);
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception exception)
+        {
+            State = GalleryLoadState.Error;
+            ErrorMessage = exception.Message;
+            return;
+        }
+
         searchGeneration++;
-        return ExecuteAsync(SearchText ?? string.Empty, searchGeneration, cancellationToken);
+        await ExecuteAsync(SearchText ?? string.Empty, searchGeneration, cancellationToken);
     }
+
+    private readonly ISettingsRepository settingsRepository;
 
     /// <summary>立即执行搜索（绕过防抖，用于建议提交与回车）。</summary>
     public void ApplySearchImmediate(string keyword)
@@ -96,6 +130,86 @@ public partial class GalleryViewModel : ObservableObject
         SearchText = keyword;
         searchGeneration++;
         _ = ExecuteAsync(keyword, searchGeneration);
+    }
+
+    /// <summary>移除单个 Chip：关键字 Chip 清空搜索，筛选 Chip 反向取消对应选项。</summary>
+    public void RemoveChip(string chipId)
+    {
+        if (chipId == "search")
+        {
+            ApplySearchImmediate(string.Empty);
+            return;
+        }
+
+        if (chipId.StartsWith("cat:", StringComparison.Ordinal))
+        {
+            FilterPane.SetCategorySelected(chipId[4..], false);
+            return;
+        }
+
+        if (chipId.StartsWith("brand:", StringComparison.Ordinal))
+        {
+            FilterPane.SetBrandSelected(chipId[6..], false);
+            return;
+        }
+
+        switch (chipId)
+        {
+            case "avail":
+            case "image":
+            case "usage":
+            case "date":
+                FilterChangedResetDimension(chipId);
+                break;
+        }
+    }
+
+    /// <summary>清除全部筛选与搜索（单次重查）。</summary>
+    public void ClearAllFilters()
+    {
+        suppressFilterChanged = true;
+        SearchText = string.Empty;
+        FilterPane.Reset();
+        suppressFilterChanged = false;
+        searchGeneration++;
+        _ = ExecuteAsync(string.Empty, searchGeneration);
+    }
+
+    internal bool suppressFilterChanged;
+
+    private void OnFilterChanged()
+    {
+        if (suppressFilterChanged)
+        {
+            return;
+        }
+
+        searchGeneration++;
+        _ = ExecuteAsync(SearchText ?? string.Empty, searchGeneration);
+    }
+
+    private void FilterChangedResetDimension(string chipId)
+    {
+        suppressFilterChanged = true;
+        switch (chipId)
+        {
+            case "avail":
+                FilterPane.Availability = AvailabilityOption.All;
+                break;
+            case "image":
+                FilterPane.ImageOptionValue = ImageOption.All;
+                break;
+            case "usage":
+                FilterPane.Usage = UsageRange.None;
+                break;
+            case "date":
+                FilterPane.UpdateRange = DateRange.All;
+                break;
+        }
+
+        suppressFilterChanged = false;
+        searchGeneration++;
+        _ = ExecuteAsync(SearchText ?? string.Empty, searchGeneration);
     }
 
     partial void OnSearchTextChanged(string? value)
@@ -122,30 +236,25 @@ public partial class GalleryViewModel : ObservableObject
         ErrorMessage = null;
         try
         {
-            IReadOnlyList<Product> rows;
-            if (string.IsNullOrWhiteSpace(keyword))
+            var query = new ProductQuery
             {
-                rows = await products.GetAllAsync(cancellationToken);
-                ResultSummary = rows.Count == 0 ? null : $"共 {rows.Count} 个产品";
-            }
-            else
-            {
-                rows = await search.SearchAsync(keyword, cancellationToken);
-                ResultSummary = rows.Count == 0
-                    ? "没有找到相关产品"
-                    : $"{keyword.Trim()} · 找到 {rows.Count} 个产品";
-            }
+                Keyword = string.IsNullOrWhiteSpace(keyword) ? null : keyword,
+                Filter = FilterPane.BuildFilter(),
+            };
+            var rows = await queryService.QueryAsync(query, cancellationToken);
 
             if (generation != searchGeneration)
             {
                 return;
             }
 
+            ResultSummary = BuildSummary(query, rows.Count);
+            RebuildChips(query);
             await ReplaceCardsAsync(rows, cancellationToken);
 
-            if (!string.IsNullOrWhiteSpace(keyword))
+            if (query.Keyword is not null)
             {
-                await RecordHistorySafeAsync(keyword.Trim(), rows.Count, cancellationToken);
+                await RecordHistorySafeAsync(query.Keyword, rows.Count, cancellationToken);
             }
         }
         catch (OperationCanceledException)
@@ -161,6 +270,93 @@ public partial class GalleryViewModel : ObservableObject
 
             State = GalleryLoadState.Error;
             ErrorMessage = exception.Message;
+        }
+    }
+
+    private static string? BuildSummary(ProductQuery query, int count)
+    {
+        if (string.IsNullOrWhiteSpace(query.Keyword))
+        {
+            return count == 0 ? null : $"共 {count} 个产品";
+        }
+
+        return count == 0
+            ? "没有找到相关产品"
+            : $"{query.Keyword.Trim()} · 找到 {count} 个产品";
+    }
+
+    private void RebuildChips(ProductQuery query)
+    {
+        ActiveChips.Clear();
+        if (!string.IsNullOrWhiteSpace(query.Keyword))
+        {
+            ActiveChips.Add(new FilterChip("search", $"搜索: {query.Keyword.Trim()}"));
+        }
+
+        var filter = query.Filter;
+        if (filter is null)
+        {
+            OnPropertyChanged(nameof(HasActiveChips));
+            return;
+        }
+
+        if (filter.Categories is not null)
+        {
+            foreach (var category in filter.Categories)
+            {
+                ActiveChips.Add(new FilterChip($"cat:{category}", category));
+            }
+        }
+
+        if (filter.Brands is not null)
+        {
+            foreach (var brand in filter.Brands)
+            {
+                ActiveChips.Add(new FilterChip($"brand:{brand}", brand));
+            }
+        }
+
+        if (filter.IsAvailable is { } available)
+        {
+            ActiveChips.Add(new FilterChip("avail", available ? "在售" : "已下架"));
+        }
+
+        if (filter.HasImage is { } hasImage)
+        {
+            ActiveChips.Add(new FilterChip("image", hasImage ? "有图片" : "无图片"));
+        }
+
+        AddChipForUsage(filter.Usage);
+        AddChipForDate(filter.UpdateTime);
+        OnPropertyChanged(nameof(HasActiveChips));
+    }
+
+    private void AddChipForUsage(UsageRange? usage)
+    {
+        switch (usage)
+        {
+            case UsageRange.NeverUsed:
+                ActiveChips.Add(new FilterChip("usage", "从未使用"));
+                break;
+            case UsageRange.Used:
+                ActiveChips.Add(new FilterChip("usage", "已使用"));
+                break;
+            case UsageRange.HighUsage:
+                ActiveChips.Add(new FilterChip("usage", "高频使用"));
+                break;
+        }
+    }
+
+    private void AddChipForDate(DateRange? range)
+    {
+        switch (range)
+        {
+            case DateRange.Last7Days:
+                ActiveChips.Add(new FilterChip("date", "最近 7 天"));
+                break;
+            case DateRange.Last30Days:
+                ActiveChips.Add(new FilterChip("date", "最近 30 天"));
+                break;
         }
     }
 
