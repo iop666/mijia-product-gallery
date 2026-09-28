@@ -119,7 +119,7 @@ public sealed class ProductFilterTests : IAsyncLifetime
     {
         var factory = new TestDbContextFactory(() => host.CreateContext());
         var filter = new FilterService(new FixedTimeProvider(NowUnix));
-        return (filter, new ProductQueryService(factory, filter));
+        return (filter, new ProductQueryService(factory, filter, new SortService()));
     }
 
     private async Task<IReadOnlyList<Product>> ApplyFilterAsync(ProductFilter filter, string? keyword = null)
@@ -418,7 +418,7 @@ public sealed class GalleryFilterChipTests : IAsyncLifetime
                 new ThumbnailService(host.Paths),
                 InlineUiDispatcher.Instance,
                 concurrency: 1),
-            new ProductQueryService(factory, new FilterService()),
+            new ProductQueryService(factory, new FilterService(), new SortService()),
             new SearchHistoryRepository(host.CreateContext()),
             new InMemorySettings(),
             InlineUiDispatcher.Instance,

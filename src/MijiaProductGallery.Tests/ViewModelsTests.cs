@@ -101,7 +101,7 @@ public sealed class GalleryViewModelTests : IAsyncLifetime
     private ProductQueryService CreateQueryService()
     {
         var factory = new TestDbContextFactory(() => host.CreateContext());
-        return new ProductQueryService(factory, new FilterService());
+        return new ProductQueryService(factory, new FilterService(), new SortService());
     }
 
     private ThumbnailLoadQueue NewQueue()

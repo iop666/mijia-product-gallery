@@ -101,7 +101,8 @@ public sealed class SeedLiveTests
             // 筛选四验收场景：空气+环境电器、小米+有图片、已下架、无图片型号。
             var queryServiceInstance = new ProductQueryService(
                 new TestDbContextFactory(() => host.CreateContext()),
-                new FilterService());
+                new FilterService(),
+                new SortService());
 
             var airEnv = await queryServiceInstance.QueryAsync(new ProductQuery
             {
@@ -139,6 +140,38 @@ public sealed class SeedLiveTests
             output.WriteLine($"[filter] 无图片型号 → {noImageList.Count}");
             Assert.Equal(3, noImageList.Count);
             Assert.All(noImageList, product => Assert.Null(product.Sha256));
+
+            // 排序三验收场景：空气+环境电器+使用次数降序、小米出品+有图片+更新时间降序、默认型号排序。
+            var sortPipeline = new ProductQueryService(
+                new TestDbContextFactory(() => host.CreateContext()),
+                new FilterService(),
+                new SortService());
+
+            var airEnvByUsage = await sortPipeline.QueryAsync(new ProductQuery
+            {
+                Keyword = "空气",
+                Filter = new ProductFilter { Categories = ["环境电器"] },
+                Sort = new ProductSort { Field = ProductSortField.UsageCount, Direction = SortDirection.Descending },
+            });
+            output.WriteLine($"[sort] 空气+环境电器+使用次数降序 → {airEnvByUsage.Count}");
+            Assert.Equal(airEnv.Count, airEnvByUsage.Count);
+            Assert.All(airEnvByUsage, product => Assert.Equal("环境电器", product.Category));
+
+            var xiaomiByUpdate = await sortPipeline.QueryAsync(new ProductQuery
+            {
+                Keyword = "小米",
+                Filter = new ProductFilter { Brands = ["小米出品"], HasImage = true },
+                Sort = new ProductSort { Field = ProductSortField.UpdateTime, Direction = SortDirection.Descending },
+            });
+            output.WriteLine($"[sort] 小米出品+有图片+更新时间降序 → {xiaomiByUpdate.Count}");
+            Assert.Equal(xiaomiWithImage.Count, xiaomiByUpdate.Count);
+            var updateTimes = xiaomiByUpdate.Select(product => product.UpdateTimeUnix ?? long.MinValue).ToList();
+            Assert.Equal(updateTimes.OrderByDescending(value => value).ToList(), updateTimes);
+
+            var byDefault = await sortPipeline.QueryAsync(new ProductQuery());
+            var defaultModels = byDefault.Select(product => product.Model).ToList();
+            Assert.Equal(defaultModels.OrderBy(model => model, StringComparer.Ordinal).ToList(), defaultModels);
+            output.WriteLine($"[sort] 默认型号排序 → {defaultModels.Count}");
         }
         finally
         {

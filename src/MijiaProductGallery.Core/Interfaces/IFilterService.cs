@@ -13,7 +13,18 @@ public interface IFilterService
     IQueryable<Product> Apply(IQueryable<Product> query, ProductFilter? filter);
 }
 
-/// <summary>组合查询服务：搜索关键字 ∩ 筛选条件，默认按型号排序。</summary>
+/// <summary>
+/// 排序条件翻译：ProductSort → IQueryable 组合。
+/// 职责仅是把排序翻译为表达式，不访问 UI、Settings、数据库；
+/// 使用次数维度需跨表子查询，由组合查询服务在同一上下文内翻译（见 SortService.ApplyUsageOrder）。
+/// </summary>
+public interface ISortService
+{
+    /// <summary>把排序叠加到查询上（追加型号次序保证同值稳定）。</summary>
+    IQueryable<Product> Apply(IQueryable<Product> query, ProductSort? sort);
+}
+
+/// <summary>组合查询服务：搜索 ∩ 筛选 ∩ 排序，全部在数据库侧执行。</summary>
 public interface IProductQueryService
 {
     /// <summary>执行组合查询（数据库侧过滤与排序）。</summary>

@@ -74,11 +74,14 @@ public sealed class ProductFilter
     }
 }
 
-/// <summary>图库查询：搜索关键字与筛选条件的组合（交集语义）。</summary>
+/// <summary>图库查询：搜索关键字与筛选条件的组合（交集语义），Sort 为显式排序。</summary>
 public sealed class ProductQuery
 {
     /// <summary>搜索关键字；空表示不过滤关键字。</summary>
     public string? Keyword { get; init; }
 
     public ProductFilter? Filter { get; init; }
+
+    /// <summary>显式排序；null = 默认（有关键字按命中优先级，无关键字按型号）。</summary>
+    public ProductSort? Sort { get; init; }
 }

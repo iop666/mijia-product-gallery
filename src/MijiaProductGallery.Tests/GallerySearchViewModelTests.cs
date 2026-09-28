@@ -69,7 +69,7 @@ public sealed class GallerySearchViewModelTests : IAsyncLifetime
                 new ThumbnailService(host.Paths),
                 InlineUiDispatcher.Instance,
                 concurrency: 1),
-            new ProductQueryService(factory, new FilterService()),
+            new ProductQueryService(factory, new FilterService(), new SortService()),
             new SearchHistoryRepository(host.CreateContext()),
             new InMemorySettings(),
             InlineUiDispatcher.Instance,

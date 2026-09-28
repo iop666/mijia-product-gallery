@@ -162,6 +162,32 @@ public sealed partial class GalleryPage : Page
         await vm.LoadAsync();
     }
 
+    private void OnSortMenuClick(object sender, RoutedEventArgs e)
+    {
+    }
+
+    private void OnSortItemClick(object sender, RoutedEventArgs e)
+    {
+        if (vm is null || sender is not MenuFlyoutItem { Tag: string tag })
+        {
+            return;
+        }
+
+        if (tag == "default")
+        {
+            vm.ApplySort(null);
+            return;
+        }
+
+        var parts = tag.Split(':');
+        if (parts.Length == 2
+            && Enum.TryParse<ProductSortField>(parts[0], ignoreCase: true, out var field)
+            && Enum.TryParse<SortDirection>(parts[1], ignoreCase: true, out var direction))
+        {
+            vm.ApplySort(new ProductSort { Field = field, Direction = direction });
+        }
+    }
+
     private void OnFilterToggleClick(object sender, RoutedEventArgs e)
     {
         if (vm is null)

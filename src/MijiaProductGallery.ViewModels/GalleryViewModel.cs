@@ -1,6 +1,8 @@
 using System.Collections.ObjectModel;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using CommunityToolkit.Mvvm.ComponentModel;
-using CommunityToolkit.Mvvm.Input;
+using MijiaProductGallery.Core.Enums;
 using MijiaProductGallery.Core.Interfaces;
 using MijiaProductGallery.Core.Models;
 using MijiaProductGallery.Core.Query;
@@ -27,15 +29,18 @@ public enum GalleryLoadState
 public sealed record FilterChip(string Id, string Label);
 
 /// <summary>
-/// 图库页视图模型：搜索关键字 ∩ 筛选条件的组合查询（500ms 防抖、过期结果丢弃），
-/// 全部过滤在数据库侧执行；卡片集合替换经 UI 调度器回投。
-/// 搜索与筛选均为查询入口，不修改官方数据；历史与筛选状态为用户数据。
+/// 图库页视图模型：搜索 ∩ 筛选 ∩ 排序的组合查询（搜索 500ms 防抖、过期结果丢弃），
+/// 全部过滤与排序在数据库侧执行；卡片集合替换经 UI 调度器回投。
+/// 搜索与筛选均为查询入口，不修改官方数据；历史与筛选/排序状态为用户数据。
 /// </summary>
 public partial class GalleryViewModel : ObservableObject
 {
+    private const string SortSettingsKey = "Gallery.SortState";
+
     private readonly IProductRepository products;
     private readonly IProductQueryService queryService;
     private readonly ISearchHistoryRepository searchHistory;
+    private readonly ISettingsRepository settings;
     private readonly ThumbnailLoadQueue thumbnailQueue;
     private readonly IUiDispatcher uiDispatcher;
     private readonly int debounceMilliseconds;
@@ -55,7 +60,7 @@ public partial class GalleryViewModel : ObservableObject
         this.thumbnailQueue = thumbnailQueue;
         this.queryService = queryService;
         this.searchHistory = searchHistory;
-        settingsRepository = settings;
+        this.settings = settings;
         this.uiDispatcher = uiDispatcher;
         this.debounceMilliseconds = debounceMilliseconds;
         FilterPane = new FilterPaneViewModel(settings);
@@ -69,6 +74,9 @@ public partial class GalleryViewModel : ObservableObject
     public ObservableCollection<ProductCard> Cards { get; } = [];
 
     public ObservableCollection<FilterChip> ActiveChips { get; } = [];
+
+    /// <summary>当前显式排序；null = 默认（有关键字按命中优先级，无关键字按型号）。</summary>
+    public ProductSort? Sort { get; private set; }
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsLoadingVisible), nameof(IsEmptyVisible), nameof(IsErrorVisible), nameof(IsReadyVisible))]
@@ -95,7 +103,7 @@ public partial class GalleryViewModel : ObservableObject
 
     public bool IsReadyVisible => State == GalleryLoadState.Ready;
 
-    /// <summary>页面入口：加载可选项（一次）并按当前关键字与筛选执行查询。</summary>
+    /// <summary>页面入口：加载可选项与排序状态（一次），并按当前关键字、筛选与排序执行查询。</summary>
     public async Task LoadAsync(CancellationToken cancellationToken = default)
     {
         try
@@ -103,7 +111,8 @@ public partial class GalleryViewModel : ObservableObject
             if (!optionsLoaded)
             {
                 optionsLoaded = true;
-                await FilterPane.LoadAsync(products, settingsRepository, cancellationToken);
+                await FilterPane.LoadAsync(products, settings, cancellationToken);
+                Sort = await RestoreSortSafeAsync(cancellationToken);
             }
         }
         catch (OperationCanceledException)
@@ -121,8 +130,6 @@ public partial class GalleryViewModel : ObservableObject
         await ExecuteAsync(SearchText ?? string.Empty, searchGeneration, cancellationToken);
     }
 
-    private readonly ISettingsRepository settingsRepository;
-
     /// <summary>立即执行搜索（绕过防抖，用于建议提交与回车）。</summary>
     public void ApplySearchImmediate(string keyword)
     {
@@ -130,6 +137,15 @@ public partial class GalleryViewModel : ObservableObject
         SearchText = keyword;
         searchGeneration++;
         _ = ExecuteAsync(keyword, searchGeneration);
+    }
+
+    /// <summary>应用显式排序（null = 恢复默认），立即执行并持久化。</summary>
+    public void ApplySort(ProductSort? sort)
+    {
+        Sort = sort;
+        _ = PersistSortSafeAsync(sort);
+        searchGeneration++;
+        _ = ExecuteAsync(SearchText ?? string.Empty, searchGeneration);
     }
 
     /// <summary>移除单个 Chip：关键字 Chip 清空搜索，筛选 Chip 反向取消对应选项。</summary>
@@ -159,12 +175,12 @@ public partial class GalleryViewModel : ObservableObject
             case "image":
             case "usage":
             case "date":
-                FilterChangedResetDimension(chipId);
+                ResetDimension(chipId);
                 break;
         }
     }
 
-    /// <summary>清除全部筛选与搜索（单次重查）。</summary>
+    /// <summary>清除全部筛选与搜索（单次重查；排序为视图偏好，保留）。</summary>
     public void ClearAllFilters()
     {
         suppressFilterChanged = true;
@@ -188,7 +204,7 @@ public partial class GalleryViewModel : ObservableObject
         _ = ExecuteAsync(SearchText ?? string.Empty, searchGeneration);
     }
 
-    private void FilterChangedResetDimension(string chipId)
+    private void ResetDimension(string chipId)
     {
         suppressFilterChanged = true;
         switch (chipId)
@@ -240,6 +256,7 @@ public partial class GalleryViewModel : ObservableObject
             {
                 Keyword = string.IsNullOrWhiteSpace(keyword) ? null : keyword,
                 Filter = FilterPane.BuildFilter(),
+                Sort = Sort,
             };
             var rows = await queryService.QueryAsync(query, cancellationToken);
 
@@ -294,70 +311,59 @@ public partial class GalleryViewModel : ObservableObject
         }
 
         var filter = query.Filter;
-        if (filter is null)
+        if (filter is not null)
         {
-            OnPropertyChanged(nameof(HasActiveChips));
-            return;
-        }
-
-        if (filter.Categories is not null)
-        {
-            foreach (var category in filter.Categories)
+            if (filter.Categories is not null)
             {
-                ActiveChips.Add(new FilterChip($"cat:{category}", category));
+                foreach (var category in filter.Categories)
+                {
+                    ActiveChips.Add(new FilterChip($"cat:{category}", category));
+                }
+            }
+
+            if (filter.Brands is not null)
+            {
+                foreach (var brand in filter.Brands)
+                {
+                    ActiveChips.Add(new FilterChip($"brand:{brand}", brand));
+                }
+            }
+
+            if (filter.IsAvailable is { } available)
+            {
+                ActiveChips.Add(new FilterChip("avail", available ? "在售" : "已下架"));
+            }
+
+            if (filter.HasImage is { } hasImage)
+            {
+                ActiveChips.Add(new FilterChip("image", hasImage ? "有图片" : "无图片"));
+            }
+
+            switch (filter.Usage)
+            {
+                case UsageRange.NeverUsed:
+                    ActiveChips.Add(new FilterChip("usage", "从未使用"));
+                    break;
+                case UsageRange.Used:
+                    ActiveChips.Add(new FilterChip("usage", "已使用"));
+                    break;
+                case UsageRange.HighUsage:
+                    ActiveChips.Add(new FilterChip("usage", "高频使用"));
+                    break;
+            }
+
+            switch (filter.UpdateTime)
+            {
+                case DateRange.Last7Days:
+                    ActiveChips.Add(new FilterChip("date", "最近 7 天"));
+                    break;
+                case DateRange.Last30Days:
+                    ActiveChips.Add(new FilterChip("date", "最近 30 天"));
+                    break;
             }
         }
 
-        if (filter.Brands is not null)
-        {
-            foreach (var brand in filter.Brands)
-            {
-                ActiveChips.Add(new FilterChip($"brand:{brand}", brand));
-            }
-        }
-
-        if (filter.IsAvailable is { } available)
-        {
-            ActiveChips.Add(new FilterChip("avail", available ? "在售" : "已下架"));
-        }
-
-        if (filter.HasImage is { } hasImage)
-        {
-            ActiveChips.Add(new FilterChip("image", hasImage ? "有图片" : "无图片"));
-        }
-
-        AddChipForUsage(filter.Usage);
-        AddChipForDate(filter.UpdateTime);
         OnPropertyChanged(nameof(HasActiveChips));
-    }
-
-    private void AddChipForUsage(UsageRange? usage)
-    {
-        switch (usage)
-        {
-            case UsageRange.NeverUsed:
-                ActiveChips.Add(new FilterChip("usage", "从未使用"));
-                break;
-            case UsageRange.Used:
-                ActiveChips.Add(new FilterChip("usage", "已使用"));
-                break;
-            case UsageRange.HighUsage:
-                ActiveChips.Add(new FilterChip("usage", "高频使用"));
-                break;
-        }
-    }
-
-    private void AddChipForDate(DateRange? range)
-    {
-        switch (range)
-        {
-            case DateRange.Last7Days:
-                ActiveChips.Add(new FilterChip("date", "最近 7 天"));
-                break;
-            case DateRange.Last30Days:
-                ActiveChips.Add(new FilterChip("date", "最近 30 天"));
-                break;
-        }
     }
 
     /// <summary>卡片集合替换必须发生在 UI 线程。</summary>
@@ -418,9 +424,59 @@ public partial class GalleryViewModel : ObservableObject
         return suggestions.Take(8).ToList();
     }
 
+    private async Task<ProductSort?> RestoreSortSafeAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            var dto = await settings.GetValueAsync(SortSettingsKey, new SortStateDto(), cancellationToken);
+            if (dto.Field is null)
+            {
+                return null;
+            }
+
+            return new ProductSort
+            {
+                Field = Enum.TryParse<ProductSortField>(dto.Field, ignoreCase: true, out var field) ? field : ProductSortField.Model,
+                Direction = Enum.TryParse<SortDirection>(dto.Direction, ignoreCase: true, out var direction) ? direction : SortDirection.Ascending,
+            };
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private async Task PersistSortSafeAsync(ProductSort? sort)
+    {
+        try
+        {
+            await settings.SetValueAsync(
+                SortSettingsKey,
+                new SortStateDto
+                {
+                    Field = sort?.Field.ToString(),
+                    Direction = sort?.Direction.ToString(),
+                });
+        }
+        catch
+        {
+            // 持久化失败不影响排序行为。
+        }
+    }
+
     /// <summary>卡片进入视口：请求缩略图加载（由 ItemsRepeater 的 ElementPrepared 调用）。</summary>
     public void CardRealized(ProductCard card)
     {
         thumbnailQueue.Request(card);
+    }
+
+    /// <summary>排序状态持久化形态（camelCase，字段缺省表示默认排序）。</summary>
+    public sealed class SortStateDto
+    {
+        [JsonPropertyName("field")]
+        public string? Field { get; set; }
+
+        [JsonPropertyName("direction")]
+        public string? Direction { get; set; }
     }
 }
