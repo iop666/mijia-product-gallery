@@ -27,6 +27,9 @@ public interface ISyncStateRepository
     /// <summary>按 Id 取同步运行记录。</summary>
     Task<SyncRun?> GetRunAsync(long runId, CancellationToken cancellationToken = default);
 
+    /// <summary>最近一轮同步运行记录（同步中心展示用）。</summary>
+    Task<SyncRun?> GetLatestRunAsync(CancellationToken cancellationToken = default);
+
     /// <summary>把一轮对比结论写入 SyncChanges（含 JSON 明细）。</summary>
     Task AddChangesAsync(long runId, IReadOnlyList<ProductChange> changes, CancellationToken cancellationToken = default);
 }

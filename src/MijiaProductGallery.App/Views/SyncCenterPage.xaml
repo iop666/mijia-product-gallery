@@ -1,0 +1,75 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Page
+    x:Class="MijiaProductGallery.App.Views.SyncCenterPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <ScrollViewer Padding="24,16">
+        <StackPanel Spacing="18" MaxWidth="720" HorizontalAlignment="Left">
+            <TextBlock Text="同步中心" FontSize="22" FontWeight="SemiBold" />
+
+            <Grid ColumnSpacing="12">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <StackPanel Spacing="6" MinWidth="180">
+                    <TextBlock Text="状态" FontSize="12.5" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                    <TextBlock Text="{Binding StatusText, Mode=OneWay}" FontSize="18" FontWeight="SemiBold" />
+                </StackPanel>
+                <StackPanel Grid.Column="1" Spacing="6">
+                    <TextBlock Text="上次同步" FontSize="12.5" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                    <TextBlock Text="{Binding LastSyncText, Mode=OneWay}" FontSize="15" />
+                </StackPanel>
+            </Grid>
+
+            <StackPanel Spacing="6" Visibility="{Binding IsRunning, Mode=OneWay, Converter={StaticResource BoolToVisibility}}">
+                <TextBlock Text="{Binding StageText, Mode=OneWay}" FontSize="13" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                <ProgressBar IsIndeterminate="True" Height="4" />
+            </StackPanel>
+
+            <InfoBar
+                IsOpen="{Binding HasError, Mode=OneWay}"
+                IsClosable="False"
+                Severity="Error"
+                Title="同步失败"
+                Message="{Binding ErrorMessage, Mode=OneWay}" />
+
+            <TextBlock Text="最近一轮变更" FontSize="14" FontWeight="SemiBold" Margin="0,8,0,0" />
+            <TextBlock
+                Text="{Binding LastRunSummary, Mode=OneWay}"
+                FontSize="13"
+                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                Visibility="{Binding HasLastRunSummary, Mode=OneWay, Converter={StaticResource BoolToVisibility}}" />
+            <TextBlock
+                Text="暂无变更记录"
+                FontSize="13"
+                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                Visibility="{Binding HasLastRunSummary, Mode=OneWay, Converter={StaticResource InverseBool}}" />
+
+            <StackPanel Orientation="Horizontal" Spacing="10" Margin="0,8,0,0">
+                <Button Content="立即同步" Style="{StaticResource AccentButtonStyle}" Click="OnSyncNowClick" />
+                <Button Content="取消" Click="OnCancelClick" IsEnabled="{Binding IsRunning, Mode=OneWay}" />
+            </StackPanel>
+
+            <TextBlock Text="自动同步" FontSize="14" FontWeight="SemiBold" Margin="0,12,0,0" />
+            <StackPanel Orientation="Horizontal" Spacing="10">
+                <ComboBox
+                    MinWidth="160"
+                    SelectedIndex="{Binding AutoIntervalIndex, Mode=TwoWay}"
+                    SelectionChanged="OnAutoIntervalSelectionChanged">
+                    <ComboBoxItem Content="关闭" />
+                    <ComboBoxItem Content="每次启动" />
+                    <ComboBoxItem Content="每 6 小时" />
+                    <ComboBoxItem Content="每天" />
+                    <ComboBoxItem Content="每周" />
+                </ComboBox>
+                <TextBlock
+                    Text="数据源：米家百科公开产品库"
+                    VerticalAlignment="Center"
+                    FontSize="12"
+                    Foreground="{ThemeResource TextFillColorTertiaryBrush}" />
+            </StackPanel>
+        </StackPanel>
+    </ScrollViewer>
+</Page>

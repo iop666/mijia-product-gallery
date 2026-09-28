@@ -21,6 +21,8 @@ public sealed partial class MainWindow : Window
     private GalleryPage? galleryPage;
     private InitializationPage? initializationPage;
     private Views.StatisticsPage? statisticsPage;
+    private SyncCenterViewModel? syncCenterViewModel;
+    private Views.SyncCenterPage? syncCenterPage;
 
     public MainWindow()
     {
@@ -133,6 +135,9 @@ public sealed partial class MainWindow : Window
             case "stats":
                 ShowStats();
                 break;
+            case "sync":
+                ShowSyncCenter();
+                break;
         }
 
         // 最近使用 / 同步中心 / 设置在后续阶段开放。
@@ -145,6 +150,15 @@ public sealed partial class MainWindow : Window
         statisticsPage.ActivateView();
         ContentFrame.Content = statisticsPage;
         SelectNavItem("stats");
+    }
+
+    private void ShowSyncCenter()
+    {
+        syncCenterViewModel ??= App.Services.GetRequiredService<SyncCenterViewModel>();
+        syncCenterPage ??= new Views.SyncCenterPage(syncCenterViewModel);
+        syncCenterPage.ActivateView();
+        ContentFrame.Content = syncCenterPage;
+        SelectNavItem("sync");
     }
 
     private void SelectNavItem(string tag)

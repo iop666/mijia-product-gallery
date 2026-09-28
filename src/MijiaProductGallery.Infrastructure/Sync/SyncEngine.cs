@@ -1,6 +1,6 @@
 using System.Collections.Concurrent;
-using System.Security.Cryptography;
 using System.Globalization;
+using System.Security.Cryptography;
 using Microsoft.Extensions.Logging;
 using MijiaProductGallery.Core.Enums;
 using MijiaProductGallery.Core.Interfaces;
@@ -14,7 +14,8 @@ namespace MijiaProductGallery.Infrastructure.Sync;
 /// 同步引擎：获取分类 → 逐类获取产品 → 标准化归类 → 对比（CatalogDiff）→ 复核图片下载
 /// → ImageStore 落盘 → 官方列白名单落库 → 缩略图 → 留痕与状态收口。
 /// 全程经过对比规则层，不直接以接口数据改库；图片下载失败保持旧状态；
-/// 单飞保护，重入时返回进行中的一轮；遗留 Running 状态先重置再同步。
+/// 单飞保护（进程级，手动与定时互斥），重入时返回进行中的一轮；遗留 Running 状态先重置再同步。
+/// 支持外部取消：取消后本轮标记失败（原因"已取消"），可重试。
 /// </summary>
 public sealed class SyncEngine(
     IBaikeApiClient apiClient,
@@ -28,28 +29,39 @@ public sealed class SyncEngine(
 {
     private const int ImageDownloadConcurrency = 8;
 
-    private readonly TimeProvider time = timeProvider ?? TimeProvider.System;
     private readonly SemaphoreSlim singleFlight = new(1, 1);
+
+    private readonly TimeProvider time = timeProvider ?? TimeProvider.System;
     private long currentRunId;
+    private CancellationTokenSource? linkedCts;
 
     public async Task<SyncRun> SyncNowAsync(SyncTrigger trigger, CancellationToken cancellationToken = default)
     {
-        if (!await singleFlight.WaitAsync(0, cancellationToken))
+        if (!singleFlight.Wait(0, cancellationToken))
         {
             var activeRunId = Interlocked.Read(ref currentRunId);
             return await syncState.GetRunAsync(activeRunId, cancellationToken)
                 ?? throw new InvalidOperationException("同步正在进行，但缺少可返回的运行记录");
         }
 
+        using var linked = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        Interlocked.Exchange(ref linkedCts, linked);
         try
         {
-            return await RunAsync(trigger, cancellationToken);
+            return await RunAsync(trigger, linked.Token);
         }
         finally
         {
-            Interlocked.Exchange(ref currentRunId, 0);
+            Interlocked.Exchange(ref linkedCts, null);
             singleFlight.Release();
         }
+    }
+
+    /// <summary>请求取消当前进行中的一轮同步（无进行中轮次为无操作）。</summary>
+    public Task CancelAsync(CancellationToken cancellationToken = default)
+    {
+        linkedCts?.Cancel();
+        return Task.CompletedTask;
     }
 
     private async Task<SyncRun> RunAsync(SyncTrigger trigger, CancellationToken cancellationToken)
@@ -386,9 +398,9 @@ public sealed class SyncEngine(
                 }
 
                 // 本轮已对照官网：采纳官网更新时间；种子导入行的空创建时间一并补齐。
-                var remote = remoteByModel[change.Model];
-                row.UpdateTimeUnix = remote.UpdateTimeUnix;
-                row.CreateTimeUnix ??= remote.CreateTimeUnix;
+                var remoteState = remoteByModel[change.Model];
+                row.UpdateTimeUnix = remoteState.UpdateTimeUnix;
+                row.CreateTimeUnix ??= remoteState.CreateTimeUnix;
 
                 ImageStoreResult? storeResult = null;
                 if (change.ImageOutcome is ImageOutcome.ImageChanged or ImageOutcome.IdReused

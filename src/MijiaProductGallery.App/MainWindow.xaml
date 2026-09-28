@@ -43,7 +43,7 @@
                     <SymbolIcon Symbol="Calculator" />
                 </NavigationViewItem.Icon>
             </NavigationViewItem>
-            <NavigationViewItem Content="同步中心" Tag="sync" IsEnabled="False">
+            <NavigationViewItem Content="同步中心" Tag="sync">
                 <NavigationViewItem.Icon>
                     <SymbolIcon Symbol="Sync" />
                 </NavigationViewItem.Icon>
