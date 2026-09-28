@@ -1,0 +1,32 @@
+# Build outputs
+bin/
+obj/
+artifacts/
+publish/
+*.user
+*.suo
+
+# IDE
+.vs/
+.idea/
+*.swp
+
+# Runtime data (app default root is %LOCALAPPDATA%\MijiaProductGallery,
+# but keep dev-machine local data out of git regardless of location)
+Data/
+database/
+images/
+thumbnails/
+backups/
+logs/
+*.db
+*.db-shm
+*.db-wal
+
+# Seed packages (large binaries go to Releases, not git)
+*.zip
+seed-*.zip
+
+# Test results
+TestResults/
+*.trx
