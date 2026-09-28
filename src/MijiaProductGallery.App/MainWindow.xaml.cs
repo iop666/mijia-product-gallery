@@ -23,6 +23,8 @@ public sealed partial class MainWindow : Window
     private Views.StatisticsPage? statisticsPage;
     private SyncCenterViewModel? syncCenterViewModel;
     private Views.SyncCenterPage? syncCenterPage;
+    private SettingsViewModel? settingsViewModel;
+    private Views.SettingsPage? settingsPage;
 
     public MainWindow()
     {
@@ -135,6 +137,9 @@ public sealed partial class MainWindow : Window
             case "stats":
                 ShowStats();
                 break;
+            case "settings":
+                ShowSettings();
+                break;
             case "sync":
                 ShowSyncCenter();
                 break;
@@ -159,6 +164,14 @@ public sealed partial class MainWindow : Window
         syncCenterPage.ActivateView();
         ContentFrame.Content = syncCenterPage;
         SelectNavItem("sync");
+    }
+
+    private void ShowSettings()
+    {
+        settingsViewModel ??= App.Services.GetRequiredService<SettingsViewModel>();
+        settingsPage ??= new Views.SettingsPage(settingsViewModel);
+        ContentFrame.Content = settingsPage;
+        SelectNavItem("settings");
     }
 
     private void SelectNavItem(string tag)
