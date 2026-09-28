@@ -38,6 +38,11 @@
                     <SymbolIcon Symbol="Clock" />
                 </NavigationViewItem.Icon>
             </NavigationViewItem>
+            <NavigationViewItem Content="统计" Tag="stats">
+                <NavigationViewItem.Icon>
+                    <SymbolIcon Symbol="Calculator" />
+                </NavigationViewItem.Icon>
+            </NavigationViewItem>
             <NavigationViewItem Content="同步中心" Tag="sync" IsEnabled="False">
                 <NavigationViewItem.Icon>
                     <SymbolIcon Symbol="Sync" />

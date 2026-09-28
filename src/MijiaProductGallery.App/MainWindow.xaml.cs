@@ -17,8 +17,10 @@ public sealed partial class MainWindow : Window
 {
     private GalleryViewModel? galleryViewModel;
     private InitializationViewModel? initializationViewModel;
+    private StatisticsViewModel? statisticsViewModel;
     private GalleryPage? galleryPage;
     private InitializationPage? initializationPage;
+    private Views.StatisticsPage? statisticsPage;
 
     public MainWindow()
     {
@@ -128,9 +130,21 @@ public sealed partial class MainWindow : Window
             case "recent":
                 ShowGallery(recent: true);
                 break;
+            case "stats":
+                ShowStats();
+                break;
         }
 
         // 最近使用 / 同步中心 / 设置在后续阶段开放。
+    }
+
+    private void ShowStats()
+    {
+        statisticsViewModel ??= App.Services.GetRequiredService<StatisticsViewModel>();
+        statisticsPage ??= new Views.StatisticsPage(statisticsViewModel);
+        statisticsPage.ActivateView();
+        ContentFrame.Content = statisticsPage;
+        SelectNavItem("stats");
     }
 
     private void SelectNavItem(string tag)

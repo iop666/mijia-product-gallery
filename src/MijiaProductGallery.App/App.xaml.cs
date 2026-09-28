@@ -52,6 +52,7 @@ public partial class App : Application
         services.AddSingleton<ISearchService, SearchService>();
         services.AddSingleton<ISystemClipboard, Services.ClipboardService>();
         services.AddSingleton<CardActionService>();
+        services.AddSingleton<StatisticsViewModel>();
         Services = services.BuildServiceProvider();
 
         MainWindow = new MainWindow();

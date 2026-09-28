@@ -26,6 +26,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<ISortService, SortService>();
         services.AddSingleton<IRecentService, RecentService>();
         services.AddSingleton<IProductQueryService, ProductQueryService>();
+        services.AddSingleton<IUsageStatisticsService, UsageStatisticsService>();
         services.AddSingleton<IThumbnailService, ThumbnailService>();
         services.AddSingleton<IBaikeApiClient, BaikeApiClient>();
         services.AddSingleton<IImageDownloader, ImageDownloader>();
