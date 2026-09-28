@@ -4,7 +4,7 @@
 
 | ID | 风险 | 影响 | 概率 | 等级 | 缓解措施 | 状态 |
 |---|---|---|---|---|---|---|
-| R01 | **全机无 .NET SDK**（PATH/注册表/安装目录均空；`~/.dotnet` 仅孤儿 sentinel）；Build Tools 2026 未装任何托管组件，其 MSBuild 无法构建 SDK 风格项目 | 阻塞 Phase 1 编译 | 已证实 | 高 | 提案 `winget install Microsoft.DotNet.SDK.10`（待批准，不擅自执行）；批准后复验 `dotnet --info` | **开放（待批准）** |
+| R01 | **全机无 .NET SDK**（PATH/注册表/安装目录均空；`~/.dotnet` 仅孤儿 sentinel）；Build Tools 2026 未装任何托管组件，其 MSBuild 无法构建 SDK 风格项目 | 阻塞 Phase 1 编译 | 已证实 | 高 | 已批准并安装 .NET SDK 10.0.401，`dotnet --info`/`--list-sdks`/`--list-runtimes` 复验通过 | **已缓解** |
 | R02 | 锁死 .NET 8 的机械决策：.NET 8 LTS 2026-11-10 到期（距今日 6 周） | 新项目落在临期运行时 | 已规避 | 高 | 已按实测改选 .NET 10 LTS + Windows App SDK 1.8.x（支持 net10.0 TFM） | 已缓解 |
 | R03 | Windows App SDK 1.8.x 的小版本漂移 / unpackaged+SelfContained 构建问题（XAML 编译、部署） | Phase 1 首个编译验收受阻 | 中 | 高 | Phase 1 第一个里程碑即"空壳 App build+run"；若 dotnet CLI 构建受阻，回退用 BuildTools 18.8 MSBuild + 补装托管组件 | 开放 |
 | R04 | `realIcon` URL 含 `&amp;` HTML 实体（实测发现，Skill 未记载） | 图片下载 403/签名失败 | 高（不处理必现） | 中 | URL 规范化管线：HTML 解码 → path percent-encode；用真实 URL 夹具单测 | 已缓解（设计内） |
@@ -21,10 +21,9 @@
 | R15 | CSV 解析（UTF-8 BOM、引号字段、特殊字符型号名） | 种子导入错行 | 中 | 中 | 正规 CSV 解析器；字段级单测；导入后计数核对 manifest | 已缓解（设计内） |
 | R16 | FTS5 依赖与 EF Core 兼容性 | 搜索降级 | 低 | 低 | 首版索引+LIKE（万行级足够），ISearchService 接口预留升级位 | 已接受 |
 | R17 | 两个仓库分工漂移（应用代码混入 icons 仓库、或应用直接改仓库文件） | 数据仓库口径破坏 | 设计期 | 高 | 修正规则 2/3 写入架构文档 §0；应用对 icons 仓库只读；seed 工具独立于运行时 | 已缓解（设计内） |
-| R18 | gh 已登录 iop666 而新建远端仓库尚未创建 | 无备份远端 | 已证实 | 低 | 待批准后 `gh repo create iop666/mijia-product-gallery`（公开/私有由用户定） | 开放（待批准） |
+| R18 | gh 已登录 iop666 而新建远端仓库尚未创建 | 无备份远端 | 已证实 | 低 | 已创建私有仓库 iop666/mijia-product-gallery 并绑定 remote（稳定转 Public 前保持 Private） | **已缓解** |
 
-## 待批准事项汇总
+## 历史待批准事项（已全部处理）
 
-1. `winget install Microsoft.DotNet.SDK.10`（R01；不安装则 Phase 1 无法编译）；
-2. `gh repo create iop666/mijia-product-gallery`（R18）；
-3. 两项均批准后，Phase 0 即视为完全收口，进入 Phase 1（Core 模型 + ProductCompareRules 基准测试）。
+1. ~~`winget install Microsoft.DotNet.SDK.10`~~ → 已安装并复验（R01）；
+2. ~~`gh repo create iop666/mijia-product-gallery`~~ → 已创建为 Private（R18）。

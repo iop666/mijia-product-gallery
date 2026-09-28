@@ -289,8 +289,8 @@ MainWindow（NavigationView 壳，标题栏集成搜索框，全屏/最大化优
 
 ---
 
-### Phase 0 遗留待批准项
+### 已批准并完成的事项
 
-1. `winget install Microsoft.DotNet.SDK.10`（不执行则 Phase 1 无法编译，文档/规则类工作可先行）；
-2. GitHub 远端 `gh repo create iop666/mijia-product-gallery`（当前仅本地仓库）；
-3. Windows App SDK 具体小版本（1.8.x 最新 stable）在 Phase 1 以 NuGet 实际解析为准。
+1. .NET SDK 10.0.401 已安装（`dotnet --info`/`--list-sdks`/`--list-runtimes` 复验通过，运行时 10.0.12，未安装额外 workload）；
+2. GitHub 私有仓库 `iop666/mijia-product-gallery` 已创建并绑定 remote（main 为默认分支，稳定后转 Public）；
+3. Windows App SDK 具体小版本在 UI 工程（后续阶段）创建时以 NuGet 实际解析为准。
