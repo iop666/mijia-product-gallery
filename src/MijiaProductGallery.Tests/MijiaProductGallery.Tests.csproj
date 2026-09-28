@@ -19,6 +19,7 @@
     <ProjectReference Include="..\MijiaProductGallery.Core\MijiaProductGallery.Core.csproj" />
     <ProjectReference Include="..\MijiaProductGallery.Infrastructure\MijiaProductGallery.Infrastructure.csproj" />
     <ProjectReference Include="..\..\tools\SeedPackTool\SeedPackTool.csproj" />
+    <ProjectReference Include="..\MijiaProductGallery.ViewModels\MijiaProductGallery.ViewModels.csproj" />
   </ItemGroup>
 
   <ItemGroup>

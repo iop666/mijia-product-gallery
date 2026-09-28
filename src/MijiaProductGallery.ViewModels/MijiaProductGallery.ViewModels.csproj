@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>MijiaProductGallery.ViewModels</RootNamespace>
+    <Description>米家产品示例图库视图模型（UI 框架无关，可单元测试）</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\MijiaProductGallery.Core\MijiaProductGallery.Core.csproj" />
+  </ItemGroup>
+
+</Project>

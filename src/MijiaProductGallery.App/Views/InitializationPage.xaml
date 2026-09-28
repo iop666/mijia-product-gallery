@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Page
+    x:Class="MijiaProductGallery.App.Views.InitializationPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:local="using:MijiaProductGallery.App.Converters">
+
+    <Grid>
+        <StackPanel
+            HorizontalAlignment="Center"
+            VerticalAlignment="Center"
+            MaxWidth="560"
+            Spacing="18">
+            <FontIcon
+                Glyph="&#xE8F1;"
+                FontSize="44"
+                HorizontalAlignment="Center"
+                Foreground="{ThemeResource AccentFillColorDefaultBrush}" />
+            <TextBlock
+                Text="正在初始化米家产品示例图库"
+                FontSize="22"
+                FontWeight="SemiBold"
+                HorizontalAlignment="Center" />
+            <TextBlock
+                x:Name="StageText"
+                Text="{x:Bind Vm.StageText, Mode=OneWay}"
+                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                HorizontalAlignment="Center"
+                TextWrapping="Wrap"
+                TextAlignment="Center" />
+            <ProgressBar
+                IsIndeterminate="{x:Bind Vm.IsIndeterminate, Mode=OneWay}"
+                Value="{x:Bind Vm.ProgressValue, Mode=OneWay}"
+                Maximum="100"
+                Height="4" />
+
+            <InfoBar
+                IsOpen="{x:Bind Vm.HasError, Mode=OneWay}"
+                IsClosable="False"
+                Severity="Error"
+                Title="初始化失败"
+                Message="{x:Bind Vm.ErrorMessage, Mode=OneWay}" />
+
+            <StackPanel
+                x:Name="ActionButtons"
+                Orientation="Horizontal"
+                HorizontalAlignment="Center"
+                Spacing="10"
+                Visibility="{x:Bind local:UiConverters.ToVisibility(Vm.IsFailed), Mode=OneWay}">
+                <Button Content="重试" Click="OnRetryClick" Style="{StaticResource AccentButtonStyle}" />
+                <Button Content="选择种子包…" Click="OnPickSeedClick" Visibility="{x:Bind local:UiConverters.ToVisibility(Vm.CanPickSeed), Mode=OneWay}" />
+                <Button Content="在线初始化" Click="OnOnlineInitClick" />
+            </StackPanel>
+        </StackPanel>
+    </Grid>
+</Page>

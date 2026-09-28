@@ -1,8 +1,10 @@
 <Solution>
   <Folder Name="/src/">
+    <Project Path="src/MijiaProductGallery.App/MijiaProductGallery.App.csproj" />
     <Project Path="src/MijiaProductGallery.Core/MijiaProductGallery.Core.csproj" />
     <Project Path="src/MijiaProductGallery.Infrastructure/MijiaProductGallery.Infrastructure.csproj" />
     <Project Path="src/MijiaProductGallery.Tests/MijiaProductGallery.Tests.csproj" />
+    <Project Path="src/MijiaProductGallery.ViewModels/MijiaProductGallery.ViewModels.csproj" />
   </Folder>
   <Folder Name="/tools/">
     <Project Path="tools/SeedPackTool/SeedPackTool.csproj" />
