@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>MijiaProductGallery.SeedPackTool</RootNamespace>
+    <Description>把 mijia-product-icons 快照打包为 seedpack-v1 初始数据包（开发期工具）</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="CsvHelper" Version="33.1.0" />
+    <PackageReference Include="SkiaSharp" Version="4.152.1" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\MijiaProductGallery.Core\MijiaProductGallery.Core.csproj" />
+  </ItemGroup>
+
+</Project>

@@ -89,6 +89,7 @@ public sealed class SyncEngine(
             currentStage = SyncStage.DownloadingImages;
             await SetStageAsync(runId, SyncStage.DownloadingImages, cancellationToken);
             var reviews = await DownloadImageReviewsAsync(remoteByModel, local, failures, cancellationToken);
+            await AdoptVerifiedTimestampsAsync(local, remoteByModel, reviews.Inputs, cancellationToken);
 
             var diff = ProductCompareRules.CompareCatalog(local, remote, reviews.Inputs);
 
@@ -211,6 +212,7 @@ public sealed class SyncEngine(
             var needsReview = localItem is null
                 ? hasImageUrl
                 : (localItem.ImageSha256 is null && hasImageUrl)
+                    || localItem.UpdateTimeUnix is null
                     || (localItem.UpdateTimeUnix is { } localUpdate && localUpdate != remoteItem.UpdateTimeUnix);
             if (needsReview)
             {
@@ -254,6 +256,42 @@ public sealed class SyncEngine(
         });
         await Task.WhenAll(tasks);
         return new ReviewOutcome(images, inputs);
+    }
+
+    /// <summary>
+    /// 对"下载 SHA 与本地一致"的复核采纳官网更新时间：种子导入行无时间戳，
+    /// 采纳后不再每轮重复复核；本步只写白名单列，不产生任何数据变化。
+    /// </summary>
+    private async Task AdoptVerifiedTimestampsAsync(
+        List<LocalProductState> local,
+        Dictionary<string, RemoteProductState> remoteByModel,
+        ConcurrentDictionary<string, ImageReviewInput> inputs,
+        CancellationToken cancellationToken)
+    {
+        if (inputs.IsEmpty)
+        {
+            return;
+        }
+
+        var localByModel = local.ToDictionary(item => item.Model, StringComparer.Ordinal);
+        var adoptions = new List<(string Model, long UpdateTimeUnix)>();
+        foreach (var (model, input) in inputs)
+        {
+            var localItem = localByModel.GetValueOrDefault(model);
+            var remoteItem = remoteByModel[model];
+            if (localItem is not null
+                && string.Equals(localItem.ImageSha256, input.DownloadedSha256, StringComparison.OrdinalIgnoreCase)
+                && localItem.UpdateTimeUnix != remoteItem.UpdateTimeUnix)
+            {
+                adoptions.Add((model, remoteItem.UpdateTimeUnix));
+            }
+        }
+
+        if (adoptions.Count > 0)
+        {
+            logger?.LogInformation("复核采纳官网时间戳：{Count} 行", adoptions.Count);
+            await products.UpdateSyncTimestampsAsync(adoptions, NowUnix(), cancellationToken);
+        }
     }
 
     private async Task<ProductChange?> ApplyChangeAsync(
@@ -345,6 +383,11 @@ public sealed class SyncEngine(
                 {
                     row.Category = change.NewCategory;
                 }
+
+                // 本轮已对照官网：采纳官网更新时间；种子导入行的空创建时间一并补齐。
+                var remote = remoteByModel[change.Model];
+                row.UpdateTimeUnix = remote.UpdateTimeUnix;
+                row.CreateTimeUnix ??= remote.CreateTimeUnix;
 
                 ImageStoreResult? storeResult = null;
                 if (change.ImageOutcome is ImageOutcome.ImageChanged or ImageOutcome.IdReused

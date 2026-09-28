@@ -191,27 +191,33 @@ Products ──1:1── ProductUsages        Collections ──1:N── Collec
 
 ## 7. Seed Package 设计（修正规则 4，新增）
 
-### 7.1 包格式 `seedpack v1`
+### 7.1 包格式 `seedpack v1`（已实现，生成器 tools/SeedPackTool）
 
 ```
-seed-2026-09-28.zip
-├─ manifest.json    { schemaVersion:1, snapshotDate:"2026-09-28", generator:"SeedPackTool x.y",
-│                     source:"iop666/mijia-product-icons@tag 2026-09-28",
-│                     productCount:10547, imageCount:10546, auxCount:2, delistedCount:14 }
-├─ products.jsonl   每行一个产品（UTF-8 无 BOM）：
-│                   { model, name, brand, category, isAvailable, imageFileName, imageFormat,
-│                     sha256, width, height, fileLength, createTime, updateTime,
+seed-<快照日期>.zip
+├─ manifest.json    { schemaVersion:1, snapshotDate, source, productCount,
+│                     imageCount(现役图数), imageFileCount(images/ 文件总数含 .old),
+│                     productsSha256(products.jsonl 摘要), generator }
+├─ products.jsonl   每行一个产品（camelCase，UTF-8 无 BOM）：
+│                   { model, name, brand, category, isAvailable,
+│                     imageFileName, sha256, format, width, height, fileLength,
+│                     createTime?(空=种子未知), updateTime?,
+│                     imageMissing?(官方登记有图但包缺，如 aux),
 │                     oldImages:[{fileName,sha256}] }
-└─ images/<model>.<ext>   平铺，含 .old*.png 历史图与 aux.* 保留名图（zip 内合法）
+└─ images/<model>.<ext>   平铺真实名（aux.* 与 .old 链在 zip 内合法），
+                          导入时映射为磁盘安全名
 ```
+种子行不携带官网时间戳（CSV 无此数据）：导入后 `UpdateTimeUnix` 为空，
+首次同步对全部带图行做一轮复核（SHA 一致即采纳官网时间戳，此后恢复增量），
+既保证收敛又避免"时间戳为 0"造成换图被误判为 ID 复用。
 
 ### 7.2 生成（开发期，`tools/SeedPackTool`）
 
 输入 = mijia-product-icons 本机检出（读 `00_总清单.csv` + `下架清单.csv` + 两棵图树，UTF-8 BOM 用正规 CSV 解析器）；逐图算 SHA256 与尺寸；输出 zip + 校验统计（与 Skill §8 自检同口径：零孤儿/零缺失/零 0 字节）。工具只在本仓库开发分支存在，随 app Release 挂 `seed-<date>.zip` 附件。
 
-### 7.3 导入（应用内，首次初始化）
+### 7.3 导入（应用内，首次初始化，已实现 SeedImporter + FirstRunInitializer）
 
-查找顺序：exe 同目录 → `%LOCALAPPDATA%\MijiaProductGallery\seed\` → 用户手选。导入流程：manifest 校验 → 计数核对 → 临时库建 Products（isAvailable 按包还原）→ 逐图按 sha 断点续拷到 `images\`（已存在且 sha 同则跳过）→ 原子换库 → 后台补缩略图。幂等可中断；导入中可取消且不留半库。种子快照日期与 API 差距由首次后台增量同步收敛。无 Seed 且无网络 → 空图库 + 离线横幅，可稍后导入/同步，**不卡启动页**。
+查找顺序：exe 同目录 → 数据根 `seed\`（`seed-*.zip` 取最大）→ 用户手选路径。导入流程：manifest 版本/计数/productsSha256 校验 → 图片集合严格对账（缺图/多图即拒）→ 逐文件流式 SHA 校验 + 原子落位（已存在且 SHA 同则跳过，损坏即修复）→ **单事务**批量写官方列（每 500 行一批）→ 快照日期收口。本地快照新于种子时拒绝降级导入；用户表零接触。可取消可重跑（幂等）。导入后首次同步为全量复核收敛（见 7.1）。无种子且离线 → 显式初始化失败状态（retry / check-seed / online-init），不伪装成正常空图库。
 
 ## 8. UI 信息架构（Phase 6+，本阶段只定结构）
 

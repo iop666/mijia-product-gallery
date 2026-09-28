@@ -18,6 +18,7 @@
   <ItemGroup>
     <ProjectReference Include="..\MijiaProductGallery.Core\MijiaProductGallery.Core.csproj" />
     <ProjectReference Include="..\MijiaProductGallery.Infrastructure\MijiaProductGallery.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\tools\SeedPackTool\SeedPackTool.csproj" />
   </ItemGroup>
 
   <ItemGroup>

@@ -18,8 +18,16 @@ public sealed class FakeBaikeApiClient : IBaikeApiClient
 
     public int GetProductsCalls { get; private set; }
 
+    /// <summary>注入后 GetCategoriesAsync 抛出该异常（模拟网络不可达）。</summary>
+    public Exception? CategoriesError { get; set; }
+
     public Task<IReadOnlyList<BaikeCategory>> GetCategoriesAsync(CancellationToken cancellationToken = default)
     {
+        if (CategoriesError is not null)
+        {
+            throw CategoriesError;
+        }
+
         return Task.FromResult<IReadOnlyList<BaikeCategory>>([.. Categories]);
     }
 
