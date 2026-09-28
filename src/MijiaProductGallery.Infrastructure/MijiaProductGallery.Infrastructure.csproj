@@ -11,6 +11,7 @@
     </PackageReference>
     <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="10.0.12" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="10.0.12" />
+    <PackageReference Include="SkiaSharp" Version="4.152.1" />
   </ItemGroup>
 
   <PropertyGroup>
