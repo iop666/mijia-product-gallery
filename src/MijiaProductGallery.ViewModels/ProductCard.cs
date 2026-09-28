@@ -76,6 +76,9 @@ public partial class ProductCard : ObservableObject
 
     public bool ShowFailed => ThumbnailState == CardThumbnailState.Failed;
 
+    /// <summary>失败占位文案：区分"无图型号"与"图片加载失败"。</summary>
+    public string FailureText => HasImage ? "图片加载失败" : "无图型号";
+
     internal void SetLoaded(string path)
     {
         ThumbnailPath = path;
