@@ -2,6 +2,7 @@ using System.Globalization;
 using Microsoft.EntityFrameworkCore;
 using MijiaProductGallery.Core.Models;
 using MijiaProductGallery.Infrastructure.Database;
+using MijiaProductGallery.Core.Enums;
 using MijiaProductGallery.Core.Query;
 using MijiaProductGallery.Infrastructure.Database.Repositories;
 using MijiaProductGallery.Infrastructure.Seed;
@@ -232,6 +233,23 @@ public sealed class SeedLiveTests
             Assert.Equal(expectedFavCount, favOnly.Count);
             var favoriteIdsInDb = (await favoritesRepository.GetFavoriteProductIdsAsync()).ToHashSet();
             Assert.All(favOnly, product => Assert.Contains(product.Id, favoriteIdsInDb));
+
+            // Recent 场景：对前 100 个收藏产品记录 View/Copy/Drag 混合行为，验证数量/倒序/事件类型。
+            var recentService = new RecentService(host.CreateContext());
+            var usageRepoForRecent = new UsageRepository(favContext);
+            for (var i = 0; i < Math.Min(100, favOnly.Count); i++)
+            {
+                var type = (UsageType)(i % 3 == 0 ? 0 : i % 3 == 1 ? 1 : 2);
+                await usageRepoForRecent.RecordAsync(favOnly[i].Id, type, 1_900_000_000 + i);
+            }
+
+            var recent = await recentService.GetRecentAsync(100);
+            output.WriteLine($"[recent] 最近使用 → {recent.Count}");
+            Assert.Equal(Math.Min(100, favOnly.Count), recent.Count);
+            var times = recent.Select(row => row.LastUsedUnix).ToList();
+            Assert.Equal(times.OrderByDescending(value => value).ToList(), times);
+            Assert.All(recent, row => Assert.Contains(row.Product.Id, favoriteIdsInDb));
+            Assert.Equal(UsageType.Drag, recent[0].LastEvent);
         }
         finally
         {

@@ -64,6 +64,7 @@ public sealed class GallerySortViewModelTests : IAsyncLifetime
                 InlineUiDispatcher.Instance,
                 concurrency: 1),
             new ProductQueryService(factory, new FilterService(), new SortService()),
+            new RecentService(host.CreateContext()),
             new SearchHistoryRepository(host.CreateContext()),
             new FavoritesRepository(host.CreateContext()),
             settings,

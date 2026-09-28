@@ -75,6 +75,10 @@ public partial class ProductCard : ObservableObject
     /// <summary>收藏角标可见性（供 x:Bind 直绑）。</summary>
     public bool ShowFavoriteBadge => IsFavorite;
 
+    /// <summary>最近使用视图的附加信息行（如"复制图片 · 2026-09-29 10:32"）。</summary>
+    [ObservableProperty]
+    private string? recentInfo;
+
     /// <summary>三种缩略图状态对应的可见性（供 x:Bind 直绑）。</summary>
     public bool ShowImage => ThumbnailState == CardThumbnailState.Loaded;
 

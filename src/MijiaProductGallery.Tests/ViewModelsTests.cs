@@ -92,6 +92,7 @@ public sealed class GalleryViewModelTests : IAsyncLifetime
             repository ?? new ProductRepository(host.CreateContext()),
             NewQueue(),
             CreateQueryService(),
+            new RecentService(host.CreateContext()),
             new SearchHistoryRepository(host.CreateContext()),
             new FavoritesRepository(host.CreateContext()),
             new InMemorySettings(),

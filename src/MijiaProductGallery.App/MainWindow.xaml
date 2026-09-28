@@ -33,13 +33,10 @@
                     <SymbolIcon Symbol="Favorite" />
                 </NavigationViewItem.Icon>
             </NavigationViewItem>
-            <NavigationViewItem Content="最近使用" Tag="recent" IsEnabled="False">
+            <NavigationViewItem Content="最近使用" Tag="recent">
                 <NavigationViewItem.Icon>
                     <SymbolIcon Symbol="Clock" />
                 </NavigationViewItem.Icon>
-                <NavigationViewItem.InfoBadge>
-                    <InfoBadge Visibility="Collapsed" />
-                </NavigationViewItem.InfoBadge>
             </NavigationViewItem>
             <NavigationViewItem Content="同步中心" Tag="sync" IsEnabled="False">
                 <NavigationViewItem.Icon>

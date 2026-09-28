@@ -74,22 +74,30 @@ public sealed partial class MainWindow : Window
         }
     }
 
-    private void ShowGallery(bool favorites = false)
+    private void ShowGallery(bool favorites = false, bool recent = false)
     {
         galleryViewModel ??= App.Services.GetRequiredService<GalleryViewModel>();
-        if (favorites)
+        if (recent)
         {
-            galleryViewModel.EnterFavoritesMode();
+            galleryViewModel.EnterRecentMode();
         }
         else
         {
-            galleryViewModel.ExitFavoritesMode();
+            galleryViewModel.ExitRecentMode();
+            if (favorites)
+            {
+                galleryViewModel.EnterFavoritesMode();
+            }
+            else
+            {
+                galleryViewModel.ExitFavoritesMode();
+            }
         }
 
         galleryPage ??= new GalleryPage(galleryViewModel);
         galleryPage.ActivateView();
         ContentFrame.Content = galleryPage;
-        SelectNavItem(favorites ? "favorites" : "gallery");
+        SelectNavItem(recent ? "recent" : favorites ? "favorites" : "gallery");
     }
 
     private void ShowInitialization()
@@ -116,6 +124,9 @@ public sealed partial class MainWindow : Window
                 break;
             case "favorites":
                 ShowGallery(favorites: true);
+                break;
+            case "recent":
+                ShowGallery(recent: true);
                 break;
         }
 

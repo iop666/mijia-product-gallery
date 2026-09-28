@@ -36,6 +36,9 @@ public enum GalleryMode
 
     /// <summary>仅收藏（查询固定叠加 IsFavorite=true）。</summary>
     Favorites,
+
+    /// <summary>最近使用（按 UsageEvents 最新事件时间倒序的浏览视图）。</summary>
+    Recent,
 }
 
 /// <summary>
@@ -49,12 +52,14 @@ public partial class GalleryViewModel : ObservableObject
 
     private readonly IProductRepository products;
     private readonly IProductQueryService queryService;
+    private readonly IRecentService recentService;
     private readonly ISearchHistoryRepository searchHistory;
     private readonly IFavoritesRepository favorites;
     private readonly ISettingsRepository settings;
     private readonly ThumbnailLoadQueue thumbnailQueue;
     private readonly IUiDispatcher uiDispatcher;
     private readonly int debounceMilliseconds;
+    private const int RecentLimit = 100;
     private int searchGeneration;
     private bool optionsLoaded;
 
@@ -62,6 +67,7 @@ public partial class GalleryViewModel : ObservableObject
         IProductRepository products,
         ThumbnailLoadQueue thumbnailQueue,
         IProductQueryService queryService,
+        IRecentService recentService,
         ISearchHistoryRepository searchHistory,
         IFavoritesRepository favorites,
         ISettingsRepository settings,
@@ -71,6 +77,7 @@ public partial class GalleryViewModel : ObservableObject
         this.products = products;
         this.thumbnailQueue = thumbnailQueue;
         this.queryService = queryService;
+        this.recentService = recentService;
         this.searchHistory = searchHistory;
         this.favorites = favorites;
         this.settings = settings;
@@ -197,6 +204,40 @@ public partial class GalleryViewModel : ObservableObject
         _ = ExecuteAsync(SearchText ?? string.Empty, searchGeneration);
     }
 
+    /// <summary>进入最近使用视图（与随机/收藏模式互斥）。</summary>
+    public void EnterRecentMode()
+    {
+        ExitRandomCore();
+        ExitFavoritesCore();
+        Mode = GalleryMode.Recent;
+        searchGeneration++;
+        _ = ExecuteAsync(SearchText ?? string.Empty, searchGeneration);
+    }
+
+    /// <summary>退出最近使用视图。</summary>
+    public void ExitRecentMode()
+    {
+        if (Mode != GalleryMode.Recent)
+        {
+            return;
+        }
+
+        Mode = GalleryMode.Normal;
+        searchGeneration++;
+        _ = ExecuteAsync(SearchText ?? string.Empty, searchGeneration);
+    }
+
+    /// <summary>清空最近使用记录（仅 UsageEvents/ProductUsages；收藏与搜索历史不受影响）。</summary>
+    public async Task ClearHistoryAsync(CancellationToken cancellationToken = default)
+    {
+        await recentService.ClearHistoryAsync(cancellationToken);
+        if (Mode == GalleryMode.Recent)
+        {
+            searchGeneration++;
+            await ExecuteAsync(SearchText ?? string.Empty, searchGeneration, cancellationToken);
+        }
+    }
+
     /// <summary>进入收藏视图：查询固定叠加 IsFavorite=true（与随机模式互斥）。</summary>
     public void EnterFavoritesMode()
     {
@@ -214,9 +255,14 @@ public partial class GalleryViewModel : ObservableObject
             return;
         }
 
-        Mode = GalleryMode.Normal;
+        ExitFavoritesCore();
         searchGeneration++;
         _ = ExecuteAsync(SearchText ?? string.Empty, searchGeneration);
+    }
+
+    private void ExitFavoritesCore()
+    {
+        Mode = GalleryMode.Normal;
     }
 
     /// <summary>切换收藏状态（用户数据）：更新卡片角标；收藏视图下产品即时移出列表。</summary>
@@ -446,6 +492,21 @@ public partial class GalleryViewModel : ObservableObject
                 return;
             }
 
+            if (Mode == GalleryMode.Recent)
+            {
+                // 最近使用：UsageEvents 聚合视图，不走常规 Sort 管线。
+                var recentRows = await recentService.GetRecentAsync(RecentLimit, cancellationToken);
+                if (generation != searchGeneration)
+                {
+                    return;
+                }
+
+                ResultSummary = recentRows.Count == 0 ? "暂无使用记录" : $"最近使用 · {recentRows.Count} 个产品";
+                ActiveChips.Clear();
+                await ReplaceRecentCardsAsync(recentRows, cancellationToken);
+                return;
+            }
+
             rows = await queryService.QueryAsync(query, cancellationToken);
 
             if (generation != searchGeneration)
@@ -670,6 +731,50 @@ public partial class GalleryViewModel : ObservableObject
         {
             // 持久化失败不影响排序行为。
         }
+    }
+
+    /// <summary>最近使用卡片替换：附带"最后行为 · 最后时间"信息。</summary>
+    private Task ReplaceRecentCardsAsync(IReadOnlyList<RecentProduct> rows, CancellationToken cancellationToken)
+    {
+        var completion = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        uiDispatcher.Post(() =>
+        {
+            try
+            {
+                Cards.Clear();
+                foreach (var row in rows)
+                {
+                    var card = new ProductCard(row.Product)
+                    {
+                        IsFavorite = favoriteIds.Contains(row.Product.Id),
+                    };
+                    var timeText = DateTimeOffset.FromUnixTimeSeconds(row.LastUsedUnix)
+                        .ToLocalTime().ToString("yyyy-MM-dd HH:mm");
+                    card.RecentInfo = $"{EventText(row.LastEvent)} · {timeText}";
+                    Cards.Add(card);
+                }
+
+                State = Cards.Count == 0 ? GalleryLoadState.Empty : GalleryLoadState.Ready;
+                completion.SetResult();
+            }
+            catch (Exception exception)
+            {
+                completion.SetException(exception);
+            }
+        });
+        return completion.Task.WaitAsync(cancellationToken);
+    }
+
+    private static string EventText(UsageType type)
+    {
+        return type switch
+        {
+            UsageType.View => "查看",
+            UsageType.Copy => "复制图片",
+            UsageType.CopyText => "复制文本",
+            UsageType.Drag => "拖拽图片",
+            _ => type.ToString(),
+        };
     }
 
     /// <summary>卡片进入视口：请求缩略图加载（由 ItemsRepeater 的 ElementPrepared 调用）。</summary>
