@@ -3,14 +3,16 @@ using Microsoft.Extensions.DependencyInjection;
 using MijiaProductGallery.Core.Interfaces;
 using MijiaProductGallery.Infrastructure.Database;
 using MijiaProductGallery.Infrastructure.Database.Repositories;
+using MijiaProductGallery.Infrastructure.Http;
 using MijiaProductGallery.Infrastructure.Images;
+using MijiaProductGallery.Infrastructure.Sync;
 
 namespace MijiaProductGallery.Infrastructure;
 
 /// <summary>Infrastructure 层依赖注入注册。</summary>
 public static class ServiceCollectionExtensions
 {
-    /// <summary>注册数据目录、DbContext、初始化器、图片系统与全部仓储。可传替代数据根（测试/便携模式）。</summary>
+    /// <summary>注册数据目录、DbContext、初始化器、图片系统、同步引擎与全部仓储。可传替代数据根（测试/便携模式）。</summary>
     public static IServiceCollection AddInfrastructure(this IServiceCollection services, string? dataRootOverride = null)
     {
         var paths = new DatabasePaths(dataRootOverride);
@@ -19,6 +21,9 @@ public static class ServiceCollectionExtensions
         services.AddScoped<DbInitializer>();
         services.AddSingleton<IImageStore, ImageStore>();
         services.AddSingleton<IThumbnailService, ThumbnailService>();
+        services.AddSingleton<IBaikeApiClient, BaikeApiClient>();
+        services.AddSingleton<IImageDownloader, ImageDownloader>();
+        services.AddScoped<ISyncService, SyncEngine>();
         services.AddScoped<IProductRepository, ProductRepository>();
         services.AddScoped<IFavoritesRepository, FavoritesRepository>();
         services.AddScoped<ICollectionRepository, CollectionRepository>();

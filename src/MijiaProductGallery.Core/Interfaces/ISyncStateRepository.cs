@@ -24,6 +24,9 @@ public interface ISyncStateRepository
         long endedUnix,
         CancellationToken cancellationToken = default);
 
+    /// <summary>按 Id 取同步运行记录。</summary>
+    Task<SyncRun?> GetRunAsync(long runId, CancellationToken cancellationToken = default);
+
     /// <summary>把一轮对比结论写入 SyncChanges（含 JSON 明细）。</summary>
     Task AddChangesAsync(long runId, IReadOnlyList<ProductChange> changes, CancellationToken cancellationToken = default);
 }
