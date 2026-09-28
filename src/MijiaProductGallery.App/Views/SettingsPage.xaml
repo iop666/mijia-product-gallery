@@ -65,19 +65,31 @@
                     FontSize="12.5"
                     TextWrapping="Wrap"
                     Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-                <Button Content="清空最近使用记录…" Click="OnClearHistoryClick" />
-                <TextBlock
-                    Text="清空仅删除使用事件与计数；收藏与搜索历史不受影响。"
-                    FontSize="12"
-                    Foreground="{ThemeResource TextFillColorTertiaryBrush}"
-                    TextWrapping="Wrap" />
+                <StackPanel Orientation="Horizontal" Spacing="10">
+                    <Button Content="立即备份数据库" Click="OnBackupNowClick" />
+                    <Button Content="清空缩略图缓存" Click="OnClearThumbCacheClick" />
+                    <Button Content="清空最近使用记录…" Click="OnClearHistoryClick" />
+                </StackPanel>
+                <StackPanel Spacing="6">
+                    <TextBlock Text="备份文件" FontSize="13" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                    <ComboBox
+                        x:Name="BackupFilesBox"
+                        MinWidth="320"
+                        PlaceholderText="选择备份文件"
+                        SelectionChanged="OnBackupSelectionChanged" />
+                    <StackPanel Orientation="Horizontal" Spacing="10">
+                        <Button Content="恢复选中的备份" Click="OnRestoreBackupClick" />
+                        <Button Content="删除备份" Click="OnDeleteBackupClick" />
+                        <Button Content="刷新列表" Click="OnRefreshBackupsClick" />
+                    </StackPanel>
+                </StackPanel>
             </StackPanel>
 
             <!-- 同步 -->
             <StackPanel Spacing="10">
                 <TextBlock Text="同步" FontSize="18" FontWeight="SemiBold" />
                 <StackPanel Spacing="6">
-                    <TextBlock Text="自动同步频率" FontSize="13" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                    <TextBlock Text="自动同步频率（详细状态请前往同步中心）" FontSize="13" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
                     <ComboBox x:Name="SyncIntervalBox" MinWidth="160" SelectionChanged="OnSyncIntervalSelectionChanged">
                         <ComboBoxItem Content="关闭" />
                         <ComboBoxItem Content="每次启动" />
@@ -85,11 +97,6 @@
                         <ComboBoxItem Content="每天" />
                         <ComboBoxItem Content="每周" />
                     </ComboBox>
-                    <TextBlock
-                        Text="详细状态与手动同步请前往同步中心。"
-                        FontSize="12"
-                        Foreground="{ThemeResource TextFillColorTertiaryBrush}"
-                        TextWrapping="Wrap" />
                 </StackPanel>
             </StackPanel>
 
@@ -103,6 +110,16 @@
                     Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                     TextWrapping="Wrap" />
             </StackPanel>
+
+            <!-- 操作结果通知 -->
+            <InfoBar
+                x:Name="NoticeBar"
+                IsOpen="False"
+                IsClosable="True"
+                Severity="Informational"
+                Title="提示"
+                HorizontalAlignment="Left"
+                MaxWidth="680" />
         </StackPanel>
     </ScrollViewer>
 </Page>

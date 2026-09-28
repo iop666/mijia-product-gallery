@@ -1,7 +1,7 @@
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
-using MijiaProductGallery.Core;
 using MijiaProductGallery.Core.Enums;
+using MijiaProductGallery.Core.Interfaces;
 using MijiaProductGallery.ViewModels;
 
 namespace MijiaProductGallery.App.Views;
@@ -10,12 +10,16 @@ namespace MijiaProductGallery.App.Views;
 public sealed partial class SettingsPage : Page
 {
     private readonly SettingsViewModel vm;
+    private readonly IBackupService backupService;
+    private readonly IThumbnailService thumbnailService;
     private bool suppressSelectionEvents;
 
-    public SettingsPage(SettingsViewModel viewModel)
+    public SettingsPage(SettingsViewModel viewModel, IBackupService backupService, IThumbnailService thumbnailService)
     {
         InitializeComponent();
         vm = viewModel;
+        this.backupService = backupService;
+        this.thumbnailService = thumbnailService;
         DataContext = vm;
         Loaded += OnLoaded;
     }
@@ -45,6 +49,15 @@ public sealed partial class SettingsPage : Page
         };
         suppressSelectionEvents = false;
         await vm.LoadAsync();
+        await RefreshBackupListAsync();
+    }
+
+    private async Task RefreshBackupListAsync()
+    {
+        var backups = await backupService.ListBackupsAsync();
+        suppressSelectionEvents = true;
+        BackupFilesBox.ItemsSource = backups.Select(entry => entry.FileName).ToList();
+        suppressSelectionEvents = false;
     }
 
     private void OnThemeSelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -83,6 +96,11 @@ public sealed partial class SettingsPage : Page
             && int.TryParse(ThumbQualityBox.Text, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var quality))
         {
             await vm.UpdateThumbnailOptionsAsync(edge, quality);
+            ShowNotice("缩略图参数已更新，新参数对新生成的缩略图生效。", InfoBarSeverity.Success);
+        }
+        else
+        {
+            ShowNotice("缩略图参数格式不正确（需为整数）。", InfoBarSeverity.Error);
         }
     }
 
@@ -119,5 +137,94 @@ public sealed partial class SettingsPage : Page
         {
             await vm.ClearHistoryAsync();
         }
+    }
+
+    private void OnBackupSelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+    }
+
+    private void OnRefreshBackupsClick(object sender, RoutedEventArgs e)
+    {
+        _ = RefreshBackupListAsync();
+    }
+
+    private async void OnBackupNowClick(object sender, RoutedEventArgs e)
+    {
+        var entry = await backupService.CreateBackupAsync();
+        await RefreshBackupListAsync();
+        ShowNotice($"备份已创建：{entry.FileName}", InfoBarSeverity.Success);
+    }
+
+    private async void OnRestoreBackupClick(object sender, RoutedEventArgs e)
+    {
+        if (BackupFilesBox.SelectedItem is not string fileName)
+        {
+            ShowNotice("请先选择要恢复的备份。", InfoBarSeverity.Warning);
+            return;
+        }
+
+        var dialog = new ContentDialog
+        {
+            XamlRoot = XamlRoot,
+            Title = "恢复数据库？",
+            Content = $"将用备份「{fileName}」替换当前数据库，恢复前会自动保存当前库的安全快照。收藏与使用记录随备份一起回滚。",
+            PrimaryButtonText = "恢复",
+            CloseButtonText = "取消",
+            DefaultButton = ContentDialogButton.Close,
+        };
+        var result = await dialog.ShowAsync();
+        if (result != ContentDialogResult.Primary)
+        {
+            return;
+        }
+
+        try
+        {
+            await backupService.RestoreAsync(fileName);
+            ShowNotice("恢复完成。", InfoBarSeverity.Success);
+        }
+        catch (Exception exception)
+        {
+            ShowNotice($"恢复失败：{exception.Message}", InfoBarSeverity.Error);
+        }
+    }
+
+    private async void OnDeleteBackupClick(object sender, RoutedEventArgs e)
+    {
+        if (BackupFilesBox.SelectedItem is not string fileName)
+        {
+            ShowNotice("请先选择要删除的备份。", InfoBarSeverity.Warning);
+            return;
+        }
+
+        var dialog = new ContentDialog
+        {
+            XamlRoot = XamlRoot,
+            Title = "删除备份？",
+            Content = $"将永久删除备份「{fileName}」，此操作不可撤销。",
+            PrimaryButtonText = "删除",
+            CloseButtonText = "取消",
+            DefaultButton = ContentDialogButton.Close,
+        };
+        var result = await dialog.ShowAsync();
+        if (result == ContentDialogResult.Primary)
+        {
+            await backupService.DeleteBackupAsync(fileName);
+            await RefreshBackupListAsync();
+        }
+    }
+
+    private async void OnClearThumbCacheClick(object sender, RoutedEventArgs e)
+    {
+        await thumbnailService.DeleteAllThumbnailsAsync();
+        ShowNotice("缩略图缓存已清空，浏览图库时会自动重建。", InfoBarSeverity.Success);
+    }
+
+    private void ShowNotice(string message, InfoBarSeverity severity)
+    {
+        NoticeBar.Severity = severity;
+        NoticeBar.Title = severity == InfoBarSeverity.Error ? "操作失败" : "提示";
+        NoticeBar.Message = message;
+        NoticeBar.IsOpen = true;
     }
 }

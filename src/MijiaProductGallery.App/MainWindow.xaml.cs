@@ -169,7 +169,10 @@ public sealed partial class MainWindow : Window
     private void ShowSettings()
     {
         settingsViewModel ??= App.Services.GetRequiredService<SettingsViewModel>();
-        settingsPage ??= new Views.SettingsPage(settingsViewModel);
+        settingsPage ??= new Views.SettingsPage(
+            settingsViewModel,
+            App.Services.GetRequiredService<IBackupService>(),
+            App.Services.GetRequiredService<IThumbnailService>());
         ContentFrame.Content = settingsPage;
         SelectNavItem("settings");
     }
