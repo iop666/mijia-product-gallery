@@ -1,0 +1,9 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>MijiaProductGallery.Core</RootNamespace>
+    <Description>米家产品示例图库核心模型与业务规则（平台无关）</Description>
+  </PropertyGroup>
+
+</Project>

@@ -1,0 +1,66 @@
+{
+  "capturedAt": "2026-09-28",
+  "endpoint": "baike/products/byCategory/V1",
+  "ptId": 16,
+  "note": "路由网关分类抽样：xiaomi.repeater.v3 自带 ptId=31、lumi.gateway.acn01 自带 ptId=12，均不等于分类 ptId=16；lumi.gateway.acn01 的 realIcon 含 &amp; HTML 实体",
+  "productSimpleVoList": [
+    {
+      "realIcon": "https://cdn.cnbj1.fds.api.mi-img.com/iotweb-user-center/developer_1679040911026iugirfLb.png?GalaxyAccessKeyId=AKVGLQWBOVIRQ3XLEW&Expires=9223372036854775807&Signature=sN/aRIyjj+CHQz8e9qHwCMLZaHY=",
+      "supportGateWayTypes": [],
+      "ptId": 31,
+      "hasIntroduction": false,
+      "topImgs": [
+        "https://cdn.cnbj1.fds.api.mi-img.com/plato-product/p_1597144314039Y89BrRqO.jpg?GalaxyAccessKeyId=AKVGLQWBOVIRQ3XLEW&Expires=9223372036854775807&Signature=fFr/u28IME6Gz77Oy95hfCcyo5I="
+      ],
+      "productSellingPoint": "",
+      "bind": false,
+      "gatewayType": 0,
+      "voiceCtrlEd": 0,
+      "model": "xiaomi.repeater.v3",
+      "pdId": 466,
+      "materialPictures": [],
+      "brand": "小米出品",
+      "brief": "",
+      "voiceEnable": 0,
+      "productOnlineTime": 1606752000,
+      "btChildGateway": 0,
+      "updateTime": 1608714662,
+      "gatewayFunc": 0,
+      "createTime": 1554102321,
+      "brandId": 0,
+      "withGateWayType": [],
+      "name": "小米Wi-Fi放大器Pro",
+      "previewImgs": [],
+      "btGateway": 0
+    },
+    {
+      "realIcon": "https://cdn.cnbj1.fds.api.mi-img.com/iotweb-product-center/developer_15777833589366K3IhYzd.png?GalaxyAccessKeyId=AKVGLQWBOVIRQ3XLEW&amp;Expires=9223372036854775807&amp;Signature=8wRQncvFGd/lYJb9YfYfTp8SknE=",
+      "supportGateWayTypes": [
+        5
+      ],
+      "ptId": 12,
+      "hasIntroduction": false,
+      "topImgs": [],
+      "productSellingPoint": "",
+      "bind": false,
+      "gatewayType": 0,
+      "voiceCtrlEd": 0,
+      "model": "lumi.gateway.acn01",
+      "pdId": 67014,
+      "materialPictures": [],
+      "brand": "Aqara",
+      "brief": "",
+      "voiceEnable": 0,
+      "productOnlineTime": 1600845883,
+      "btChildGateway": 0,
+      "updateTime": 1700533059,
+      "gatewayFunc": 2,
+      "createTime": 1691130695,
+      "brandId": 0,
+      "withGateWayType": [],
+      "name": "Aqara 网关M1S",
+      "previewImgs": [],
+      "btGateway": 0
+    }
+  ]
+}
