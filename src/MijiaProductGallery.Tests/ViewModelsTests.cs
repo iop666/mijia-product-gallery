@@ -50,7 +50,7 @@ public sealed class GalleryViewModelTests : IAsyncLifetime
             FirstSeenUnix = 1,
             LastSeenUnix = 1,
         });
-        var vm = new GalleryViewModel(products, NewQueue());
+        var vm = CreateViewModel(products);
 
         await vm.LoadAsync();
 
@@ -64,7 +64,7 @@ public sealed class GalleryViewModelTests : IAsyncLifetime
     [Fact]
     public async Task Load_EmptyDatabase_EmptyState()
     {
-        var vm = new GalleryViewModel(new ProductRepository(host.CreateContext()), NewQueue());
+        var vm = CreateViewModel(new ProductRepository(host.CreateContext()));
 
         await vm.LoadAsync();
 
@@ -75,13 +75,26 @@ public sealed class GalleryViewModelTests : IAsyncLifetime
     [Fact]
     public async Task Load_RepositoryThrows_ErrorState()
     {
-        var vm = new GalleryViewModel(new ThrowingProductRepository(), NewQueue());
+        var vm = CreateViewModel(new ThrowingProductRepository());
 
         await vm.LoadAsync();
 
         Assert.Equal(GalleryLoadState.Error, vm.State);
         Assert.True(vm.IsErrorVisible);
         Assert.NotNull(vm.ErrorMessage);
+    }
+
+    private GalleryViewModel CreateViewModel(
+        IProductRepository? repository = null,
+        ISearchService? search = null)
+    {
+        return new GalleryViewModel(
+            repository ?? new ProductRepository(host.CreateContext()),
+            NewQueue(),
+            search ?? new StubSearchService([]),
+            new SearchHistoryRepository(host.CreateContext()),
+            InlineUiDispatcher.Instance,
+            debounceMilliseconds: 10);
     }
 
     private ThumbnailLoadQueue NewQueue()

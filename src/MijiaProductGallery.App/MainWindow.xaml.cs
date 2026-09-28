@@ -1,6 +1,7 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Input;
 using MijiaProductGallery.App.Views;
 using MijiaProductGallery.Infrastructure.Database;
 using MijiaProductGallery.Core.Interfaces;
@@ -30,6 +31,29 @@ public sealed partial class MainWindow : Window
     private async void OnLoaded(object sender, RoutedEventArgs e)
     {
         await RouteAsync();
+    }
+
+    private async void OnSearchTextChanged(AutoSuggestBox sender, AutoSuggestBoxTextChangedEventArgs args)
+    {
+        if (!args.CheckCurrent())
+        {
+            return;
+        }
+
+        var vm = galleryViewModel ??= App.Services.GetRequiredService<GalleryViewModel>();
+        SearchBox.ItemsSource = await vm.GetSearchSuggestionsAsync(sender.Text);
+    }
+
+    private void OnSearchQuerySubmitted(AutoSuggestBox sender, AutoSuggestBoxQuerySubmittedEventArgs args)
+    {
+        var vm = galleryViewModel ??= App.Services.GetRequiredService<GalleryViewModel>();
+        vm.ApplySearchImmediate(args.QueryText ?? string.Empty);
+    }
+
+    private void OnCtrlFInvoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
+    {
+        SearchBox.Focus(FocusState.Keyboard);
+        args.Handled = true;
     }
 
     private async Task RouteAsync()

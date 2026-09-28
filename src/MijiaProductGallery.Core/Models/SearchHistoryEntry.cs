@@ -8,4 +8,7 @@ public sealed record SearchHistoryEntry
     public required string Query { get; init; }
 
     public required long CreatedUnix { get; init; }
+
+    /// <summary>该次搜索命中的产品数。</summary>
+    public int ResultCount { get; init; }
 }

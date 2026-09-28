@@ -13,8 +13,19 @@
         </DataTemplate>
     </Page.Resources>
 
-    <Grid>
+    <Grid RowSpacing="4">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+        <TextBlock
+            Text="{x:Bind Vm.ResultSummary, Mode=OneWay}"
+            FontSize="12.5"
+            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+            Margin="12,8,0,0"
+            Visibility="{x:Bind local:UiConverters.ToVisibility(Vm.HasResultSummary), Mode=OneWay}" />
         <ScrollViewer
+            Grid.Row="1"
             x:Name="CardsScroll"
             Visibility="{x:Bind local:UiConverters.ToVisibility(Vm.IsReadyVisible), Mode=OneWay}">
             <ItemsRepeater
@@ -33,6 +44,7 @@
         </ScrollViewer>
 
         <StackPanel
+            Grid.Row="1"
             HorizontalAlignment="Center"
             VerticalAlignment="Center"
             Spacing="12"
@@ -42,6 +54,7 @@
         </StackPanel>
 
         <StackPanel
+            Grid.Row="1"
             HorizontalAlignment="Center"
             VerticalAlignment="Center"
             Spacing="8"
@@ -55,6 +68,7 @@
         </StackPanel>
 
         <StackPanel
+            Grid.Row="1"
             HorizontalAlignment="Center"
             VerticalAlignment="Center"
             Spacing="8"
@@ -71,6 +85,7 @@
         </StackPanel>
 
         <InfoBar
+            Grid.Row="1"
             x:Name="NoticeBar"
             IsOpen="False"
             IsClosable="True"

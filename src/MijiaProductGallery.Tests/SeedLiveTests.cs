@@ -84,6 +84,18 @@ public sealed class SeedLiveTests
             var heater = await context.Products.AsNoTracking().SingleAsync(p => p.Model == "zhimi.heater.za1");
             Assert.NotNull(heater.Sha256);
             Assert.True(File.Exists(Path.Combine(host.Paths.ImagesDirectory, "zhimi.heater.za1.png")));
+
+            // 搜索性能：真实 10,547 产品上四个关键词，均应 <100ms。
+            var search = new SearchService(host.CreateContext());
+            foreach (var keyword in new[] { "空气", "小米", "camera", "xiaomi" })
+            {
+                var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+                var found = await search.SearchAsync(keyword);
+                stopwatch.Stop();
+                output.WriteLine($"[search] '{keyword}' → {found.Count} 个产品，{stopwatch.Elapsed.TotalMilliseconds:F1}ms");
+                Assert.NotEmpty(found);
+                Assert.True(stopwatch.ElapsedMilliseconds < 100, $"搜索 {keyword} 耗时 {stopwatch.ElapsedMilliseconds}ms 超过 100ms");
+            }
         }
         finally
         {

@@ -3,6 +3,7 @@ using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml;
 using MijiaProductGallery.Core.Interfaces;
 using MijiaProductGallery.Infrastructure;
+using MijiaProductGallery.Infrastructure.Database.Repositories;
 using MijiaProductGallery.Infrastructure.Sync;
 using MijiaProductGallery.ViewModels;
 
@@ -47,6 +48,7 @@ public partial class App : Application
         services.AddSingleton<GalleryViewModel>();
         services.AddSingleton<InitializationViewModel>();
         services.AddSingleton<IUsageService, UsageService>();
+        services.AddSingleton<ISearchService, SearchService>();
         services.AddSingleton<ISystemClipboard, Services.ClipboardService>();
         services.AddSingleton<CardActionService>();
         Services = services.BuildServiceProvider();
