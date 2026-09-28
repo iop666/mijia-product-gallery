@@ -172,7 +172,9 @@ Products ──1:1── ProductUsages        Collections ──1:N── Collec
 
 默认每天 1 次；可选：每次启动 / 6 小时 / 每天 / 每周 / 关闭。距上次成功同步不足间隔则跳过。后台线程执行，不阻塞 UI；同步中心显示阶段（获取分类→获取产品→比较→下载→缩略图→落库→完成）、统计（新增/下架/换图/归类/ID复用/异常图）与失败原因/阶段/重试按钮。
 
-## 6. 图片生命周期（Phase 3）
+## 6. 图片生命周期（Phase 3，详细设计见 [IMAGE_SYSTEM.md](IMAGE_SYSTEM.md)，已实现）
+
+`Infrastructure/Images/`：`ImageStore`（临时文件 → 文件头判定 → 完整解码 → SHA256 → 原子落位，入口 StoreNew / Replace / ReplaceWithHistory 与对比规则一一对应）与 `ThumbnailService`（`{安全主名}.{sha8}.webp`，SHA 绑定、损坏自愈、可全量重建）。
 
 ```
 来源(API realIcon / Seed Package)
