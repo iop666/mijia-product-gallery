@@ -116,6 +116,7 @@ public sealed partial class ProductCardControl : UserControl
     {
         var hasImage = Card?.HasImage ?? false;
         MenuCopyImage.IsEnabled = hasImage;
+        MenuFavorite.Text = Card?.IsFavorite == true ? "★ 取消收藏" : "☆ 加入收藏";
     }
 
     private void ResetInteraction()

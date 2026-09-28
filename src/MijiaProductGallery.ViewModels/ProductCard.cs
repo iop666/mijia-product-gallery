@@ -58,6 +58,9 @@ public partial class ProductCard : ObservableObject
     public bool HasImage { get; }
 
     [ObservableProperty]
+    private bool isFavorite;
+
+    [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(ShowImage), nameof(ShowLoading), nameof(ShowFailed))]
     private CardThumbnailState thumbnailState;
 
@@ -68,6 +71,9 @@ public partial class ProductCard : ObservableObject
     internal bool LoadRequested { get; set; }
 
     internal string? LoadKey => ImageFileName is null || Sha256 is null ? null : ImageFileName + "|" + Sha256;
+
+    /// <summary>收藏角标可见性（供 x:Bind 直绑）。</summary>
+    public bool ShowFavoriteBadge => IsFavorite;
 
     /// <summary>三种缩略图状态对应的可见性（供 x:Bind 直绑）。</summary>
     public bool ShowImage => ThumbnailState == CardThumbnailState.Loaded;

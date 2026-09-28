@@ -205,7 +205,8 @@ public sealed class CardActionServiceTests : IAsyncLifetime
         };
         products.AddAsync(product).Wait();
         card = new ProductCard(product);
-        return new CardActionService(store, clipboard, usageService);
+        var favoriteService = new FavoriteService(new TestDbContextFactory(() => host.CreateContext()));
+        return new CardActionService(store, clipboard, usageService, favoriteService);
     }
 
     [Fact]

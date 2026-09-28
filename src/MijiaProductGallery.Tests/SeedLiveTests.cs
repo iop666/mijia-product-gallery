@@ -203,6 +203,35 @@ public sealed class SeedLiveTests
             }
 
             Assert.True(shown.Count > 0);
+
+            // 收藏场景：把"空气+环境电器"命中的前 100 个加入收藏，再以收藏+分类+关键字组合查询。
+            await using var favContext = host.CreateContext();
+            var favoritesRepository = new FavoritesRepository(favContext);
+            var airEnvAll = await queryServiceInstance.QueryAsync(new ProductQuery
+            {
+                Keyword = "空气",
+                Filter = new ProductFilter { Categories = ["环境电器"] },
+            });
+            foreach (var product in airEnvAll.Take(100))
+            {
+                await favoritesRepository.AddAsync(product.Id, 1_800_000_000);
+            }
+
+            var favOnly = await queryServiceInstance.QueryAsync(new ProductQuery
+            {
+                Keyword = "空气",
+                Filter = new ProductFilter
+                {
+                    Categories = ["环境电器"],
+                    IsFavorite = true,
+                },
+                Sort = new ProductSort { Field = ProductSortField.Name, Direction = SortDirection.Ascending },
+            });
+            output.WriteLine($"[favorites] 收藏+空气+环境电器 → {favOnly.Count}");
+            var expectedFavCount = Math.Min(100, airEnvAll.Count);
+            Assert.Equal(expectedFavCount, favOnly.Count);
+            var favoriteIdsInDb = (await favoritesRepository.GetFavoriteProductIdsAsync()).ToHashSet();
+            Assert.All(favOnly, product => Assert.Contains(product.Id, favoriteIdsInDb));
         }
         finally
         {

@@ -162,6 +162,42 @@ public sealed class SyncEngineTests : IDisposable
     }
 
     [Fact]
+    public async Task Sync_DoesNotTouchFavorites()
+    {
+        var bytes = ImageFixtures.CreatePng();
+        var seededProduct = await host.SeedProductWithImageAsync("a.model.01", "甲", "其他", bytes);
+        var favorites = new FavoritesRepository(host.CreateContext());
+        await favorites.AddAsync(seededProduct.Id, 1_700_000_000);
+
+        host.Api.AddCategory(9, "其他");
+        host.Api.AddProduct(9, "a.model.01", "甲（改名）", "b", 1, 2);
+        host.Downloader.Responses[IconUrl("a.model.01")] = bytes;
+
+        var run = await (await host.CreateEngineAsync()).SyncNowAsync(SyncTrigger.Manual);
+
+        Assert.Equal(SyncStatus.Success, run.Status);
+        Assert.True(await favorites.IsFavoriteAsync(seededProduct.Id));
+        Assert.Equal(1, await host.CreateContext().Favorites.CountAsync());
+    }
+
+    [Fact]
+    public async Task Sync_DelistedProduct_FavoriteRowRetained()
+    {
+        var bytes = ImageFixtures.CreatePng();
+        var seededProduct = await host.SeedProductWithImageAsync("midjd.fridge.bs42s", "已下架冰箱", "厨房电器", bytes);
+        var favorites = new FavoritesRepository(host.CreateContext());
+        await favorites.AddAsync(seededProduct.Id, 1_700_000_000);
+
+        host.Api.AddCategory(3, "厨房电器");
+
+        await (await host.CreateEngineAsync()).SyncNowAsync(SyncTrigger.Manual);
+
+        Assert.True(await favorites.IsFavoriteAsync(seededProduct.Id));
+        var row = await host.CreateContext().Favorites.AsNoTracking().SingleAsync();
+        Assert.Equal(seededProduct.Id, row.ProductId);
+    }
+
+    [Fact]
     public async Task Sync_SecondRun_MakesNoChanges_AndSkipsDownloads()
     {
         var bytes = ImageFixtures.CreatePng();

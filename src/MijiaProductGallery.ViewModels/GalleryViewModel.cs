@@ -25,8 +25,18 @@ public enum GalleryLoadState
     Error,
 }
 
-/// <summary>筛选 Chip：一个激活的筛选条件（含搜索关键字）。</summary>
+/// <summary>筛选 Chip：一个激活的筛选条件（含搜索关键字与收藏模式）。</summary>
 public sealed record FilterChip(string Id, string Label);
+
+/// <summary>图库模式：收藏视图通过把 IsFavorite=true 叠加进筛选实现（复用同一条查询管线）。</summary>
+public enum GalleryMode
+{
+    /// <summary>全部产品。</summary>
+    Normal,
+
+    /// <summary>仅收藏（查询固定叠加 IsFavorite=true）。</summary>
+    Favorites,
+}
 
 /// <summary>
 /// 图库页视图模型：搜索 ∩ 筛选 ∩ 排序的组合查询（搜索 500ms 防抖、过期结果丢弃），
@@ -40,6 +50,7 @@ public partial class GalleryViewModel : ObservableObject
     private readonly IProductRepository products;
     private readonly IProductQueryService queryService;
     private readonly ISearchHistoryRepository searchHistory;
+    private readonly IFavoritesRepository favorites;
     private readonly ISettingsRepository settings;
     private readonly ThumbnailLoadQueue thumbnailQueue;
     private readonly IUiDispatcher uiDispatcher;
@@ -52,6 +63,7 @@ public partial class GalleryViewModel : ObservableObject
         ThumbnailLoadQueue thumbnailQueue,
         IProductQueryService queryService,
         ISearchHistoryRepository searchHistory,
+        IFavoritesRepository favorites,
         ISettingsRepository settings,
         IUiDispatcher uiDispatcher,
         int debounceMilliseconds = 500)
@@ -60,6 +72,7 @@ public partial class GalleryViewModel : ObservableObject
         this.thumbnailQueue = thumbnailQueue;
         this.queryService = queryService;
         this.searchHistory = searchHistory;
+        this.favorites = favorites;
         this.settings = settings;
         this.uiDispatcher = uiDispatcher;
         this.debounceMilliseconds = debounceMilliseconds;
@@ -77,6 +90,15 @@ public partial class GalleryViewModel : ObservableObject
 
     /// <summary>当前显式排序；null = 默认（有关键字按命中优先级，无关键字按型号）。</summary>
     public ProductSort? Sort { get; private set; }
+
+    /// <summary>图库模式（全部产品/仅收藏）。</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsFavoritesMode))]
+    private GalleryMode mode = GalleryMode.Normal;
+
+    public bool IsFavoritesMode => Mode == GalleryMode.Favorites;
+
+    private HashSet<int> favoriteIds = new();
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsLoadingVisible), nameof(IsEmptyVisible), nameof(IsErrorVisible), nameof(IsReadyVisible))]
@@ -136,6 +158,7 @@ public partial class GalleryViewModel : ObservableObject
             {
                 optionsLoaded = true;
                 await FilterPane.LoadAsync(products, settings, cancellationToken);
+                favoriteIds = [.. await favorites.GetFavoriteProductIdsAsync(cancellationToken)];
                 Sort = await RestoreSortSafeAsync(cancellationToken);
             }
         }
@@ -174,9 +197,59 @@ public partial class GalleryViewModel : ObservableObject
         _ = ExecuteAsync(SearchText ?? string.Empty, searchGeneration);
     }
 
+    /// <summary>进入收藏视图：查询固定叠加 IsFavorite=true（与随机模式互斥）。</summary>
+    public void EnterFavoritesMode()
+    {
+        ExitRandomCore();
+        Mode = GalleryMode.Favorites;
+        searchGeneration++;
+        _ = ExecuteAsync(SearchText ?? string.Empty, searchGeneration);
+    }
+
+    /// <summary>退出收藏视图（回到全部产品）。</summary>
+    public void ExitFavoritesMode()
+    {
+        if (Mode == GalleryMode.Normal)
+        {
+            return;
+        }
+
+        Mode = GalleryMode.Normal;
+        searchGeneration++;
+        _ = ExecuteAsync(SearchText ?? string.Empty, searchGeneration);
+    }
+
+    /// <summary>切换收藏状态（用户数据）：更新卡片角标；收藏视图下产品即时移出列表。</summary>
+    public async Task<bool> ToggleFavoriteAsync(ProductCard card, CancellationToken cancellationToken = default)
+    {
+        var newState = await favorites.ToggleAsync(card.ProductId, cancellationToken);
+        card.IsFavorite = newState;
+        if (newState)
+        {
+            favoriteIds.Add(card.ProductId);
+        }
+        else
+        {
+            favoriteIds.Remove(card.ProductId);
+            if (Mode == GalleryMode.Favorites)
+            {
+                searchGeneration++;
+                _ = ExecuteAsync(SearchText ?? string.Empty, searchGeneration, cancellationToken);
+            }
+        }
+
+        return newState;
+    }
+
     /// <summary>移除单个 Chip：关键字 Chip 清空搜索，筛选 Chip 反向取消对应选项。</summary>
     public void RemoveChip(string chipId)
     {
+        if (chipId == "fav")
+        {
+            ExitFavoritesMode();
+            return;
+        }
+
         if (chipId == "search")
         {
             ApplySearchImmediate(string.Empty);
@@ -323,10 +396,17 @@ public partial class GalleryViewModel : ObservableObject
         ErrorMessage = null;
         try
         {
+            var filter = FilterPane.BuildFilter();
+            if (Mode == GalleryMode.Favorites)
+            {
+                filter ??= new ProductFilter();
+                filter.IsFavorite = true;
+            }
+
             var query = new ProductQuery
             {
                 Keyword = string.IsNullOrWhiteSpace(keyword) ? null : keyword,
-                Filter = FilterPane.BuildFilter(),
+                Filter = filter,
                 Sort = Sort,
             };
             IReadOnlyList<Product> rows;
@@ -375,7 +455,7 @@ public partial class GalleryViewModel : ObservableObject
 
             ResultSummary = BuildSummary(query, rows.Count);
             RebuildChips(query);
-            await ReplaceCardsAsync(rows, cancellationToken);
+            await ReplaceCardsAsync(rows, cancellationToken, favoriteIds);
 
             if (query.Keyword is not null)
             {
@@ -400,19 +480,27 @@ public partial class GalleryViewModel : ObservableObject
 
     private static string? BuildSummary(ProductQuery query, int count)
     {
+        var prefix = query.Filter?.IsFavorite == true ? "收藏 · " : null;
         if (string.IsNullOrWhiteSpace(query.Keyword))
         {
-            return count == 0 ? null : $"共 {count} 个产品";
+            return count == 0
+                ? (query.Filter?.IsFavorite == true ? "暂无收藏产品" : null)
+                : $"{prefix}共 {count} 个产品";
         }
 
         return count == 0
             ? "没有找到相关产品"
-            : $"{query.Keyword.Trim()} · 找到 {count} 个产品";
+            : $"{prefix}{query.Keyword.Trim()} · 找到 {count} 个产品";
     }
 
     private void RebuildChips(ProductQuery query)
     {
         ActiveChips.Clear();
+        if (Mode == GalleryMode.Favorites)
+        {
+            ActiveChips.Add(new FilterChip("fav", "收藏"));
+        }
+
         if (!string.IsNullOrWhiteSpace(query.Keyword))
         {
             ActiveChips.Add(new FilterChip("search", $"搜索: {query.Keyword.Trim()}"));
@@ -476,6 +564,12 @@ public partial class GalleryViewModel : ObservableObject
 
     /// <summary>卡片集合替换必须发生在 UI 线程。</summary>
     private Task ReplaceCardsAsync(IReadOnlyList<Product> rows, CancellationToken cancellationToken)
+        => ReplaceCardsAsync(rows, cancellationToken, null);
+
+    private Task ReplaceCardsAsync(
+        IReadOnlyList<Product> rows,
+        CancellationToken cancellationToken,
+        HashSet<int>? favoriteIdSet)
     {
         var completion = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         uiDispatcher.Post(() =>
@@ -485,7 +579,13 @@ public partial class GalleryViewModel : ObservableObject
                 Cards.Clear();
                 foreach (var row in rows)
                 {
-                    Cards.Add(new ProductCard(row));
+                    var card = new ProductCard(row);
+                    if (favoriteIdSet is not null && favoriteIdSet.Contains(row.Id))
+                    {
+                        card.IsFavorite = true;
+                    }
+
+                    Cards.Add(card);
                 }
 
                 State = Cards.Count == 0 ? GalleryLoadState.Empty : GalleryLoadState.Ready;

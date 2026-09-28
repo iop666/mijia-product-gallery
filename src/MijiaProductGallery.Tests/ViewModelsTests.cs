@@ -93,6 +93,7 @@ public sealed class GalleryViewModelTests : IAsyncLifetime
             NewQueue(),
             CreateQueryService(),
             new SearchHistoryRepository(host.CreateContext()),
+            new FavoritesRepository(host.CreateContext()),
             new InMemorySettings(),
             InlineUiDispatcher.Instance,
             debounceMilliseconds: 10);

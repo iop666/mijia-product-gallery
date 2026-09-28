@@ -45,6 +45,9 @@ public sealed class ProductFilter
     /// <summary>true=仅有图片；false=仅无图片；null=全部。</summary>
     public bool? HasImage { get; set; }
 
+    /// <summary>true=仅收藏；false=仅未收藏；null=全部。</summary>
+    public bool? IsFavorite { get; set; }
+
     public UsageRange? Usage { get; set; }
 
     public DateRange? UpdateTime { get; set; }
@@ -56,6 +59,7 @@ public sealed class ProductFilter
         && (Brands is null || Brands.Count == 0)
         && IsAvailable is null
         && HasImage is null
+        && IsFavorite is null
         && (Usage is null or UsageRange.None)
         && (UpdateTime is null or DateRange.All);
 

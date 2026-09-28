@@ -28,6 +28,11 @@
                     <SymbolIcon Symbol="Pictures" />
                 </NavigationViewItem.Icon>
             </NavigationViewItem>
+            <NavigationViewItem Content="收藏" Tag="favorites">
+                <NavigationViewItem.Icon>
+                    <SymbolIcon Symbol="Favorite" />
+                </NavigationViewItem.Icon>
+            </NavigationViewItem>
             <NavigationViewItem Content="最近使用" Tag="recent" IsEnabled="False">
                 <NavigationViewItem.Icon>
                     <SymbolIcon Symbol="Clock" />

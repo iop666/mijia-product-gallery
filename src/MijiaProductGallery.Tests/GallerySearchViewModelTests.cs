@@ -71,6 +71,7 @@ public sealed class GallerySearchViewModelTests : IAsyncLifetime
                 concurrency: 1),
             new ProductQueryService(factory, new FilterService(), new SortService()),
             new SearchHistoryRepository(host.CreateContext()),
+            new FavoritesRepository(host.CreateContext()),
             new InMemorySettings(),
             InlineUiDispatcher.Instance,
             debounceMilliseconds);

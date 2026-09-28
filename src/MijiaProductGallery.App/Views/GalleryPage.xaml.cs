@@ -117,9 +117,10 @@ public sealed partial class GalleryPage : Page
         _ = usage.RecordAsync(card.ProductId, UsageType.Drag, DateTimeOffset.UtcNow.ToUnixTimeSeconds());
     }
 
-    private void OnCardFavoriteRequested(object? sender, ProductCard card)
+    private async void OnCardFavoriteRequested(object? sender, ProductCard card)
     {
-        ShowNotice("收藏功能将在后续阶段开放（当前版本未写入任何数据）");
+        // 经 FavoriteService 切换收藏（幂等，用户数据）。
+        await cardActions.ToggleFavoriteAsync(card);
     }
 
     private void OnCardActionFailed(object? sender, string message)

@@ -24,12 +24,20 @@ public partial class CardActionService : ObservableObject
     private readonly IImageStore imageStore;
     private readonly ISystemClipboard clipboard;
     private readonly IUsageService usage;
+    private readonly IFavoriteService favorites;
 
-    public CardActionService(IImageStore imageStore, ISystemClipboard clipboard, IUsageService usage)
+    public CardActionService(IImageStore imageStore, ISystemClipboard clipboard, IUsageService usage, IFavoriteService favorites)
     {
         this.imageStore = imageStore;
         this.clipboard = clipboard;
         this.usage = usage;
+        this.favorites = favorites;
+    }
+
+    /// <summary>切换收藏状态（幂等，用户数据）；返回切换后的状态。</summary>
+    public Task<bool> ToggleFavoriteAsync(ProductCard card, CancellationToken cancellationToken = default)
+    {
+        return favorites.ToggleAsync(card.ProductId, cancellationToken);
     }
 
     /// <summary>收藏请求事件（用户数据，Phase 12 实现持久化）。</summary>

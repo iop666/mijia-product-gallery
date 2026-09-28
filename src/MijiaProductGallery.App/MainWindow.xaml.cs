@@ -74,13 +74,22 @@ public sealed partial class MainWindow : Window
         }
     }
 
-    private void ShowGallery()
+    private void ShowGallery(bool favorites = false)
     {
         galleryViewModel ??= App.Services.GetRequiredService<GalleryViewModel>();
+        if (favorites)
+        {
+            galleryViewModel.EnterFavoritesMode();
+        }
+        else
+        {
+            galleryViewModel.ExitFavoritesMode();
+        }
+
         galleryPage ??= new GalleryPage(galleryViewModel);
         galleryPage.ActivateView();
         ContentFrame.Content = galleryPage;
-        SelectNavItem("gallery");
+        SelectNavItem(favorites ? "favorites" : "gallery");
     }
 
     private void ShowInitialization()
@@ -95,14 +104,19 @@ public sealed partial class MainWindow : Window
 
     private void OnInitializationSucceeded()
     {
-        _ = DispatcherQueue.TryEnqueue(ShowGallery);
+        DispatcherQueue.TryEnqueue(() => ShowGallery());
     }
 
     private void OnItemInvoked(NavigationView sender, NavigationViewItemInvokedEventArgs args)
     {
-        if (args.InvokedItemContainer?.Tag is "gallery")
+        switch (args.InvokedItemContainer?.Tag)
         {
-            ShowGallery();
+            case "gallery":
+                ShowGallery();
+                break;
+            case "favorites":
+                ShowGallery(favorites: true);
+                break;
         }
 
         // 最近使用 / 同步中心 / 设置在后续阶段开放。

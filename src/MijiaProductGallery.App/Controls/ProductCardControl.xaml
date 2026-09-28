@@ -68,6 +68,16 @@
                             Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                             HorizontalAlignment="Center" />
                     </StackPanel>
+                    <TextBlock
+                        x:Name="FavoriteBadge"
+                        Text="&#xE735;"
+                        FontFamily="{ThemeResource SymbolThemeFontFamily}"
+                        FontSize="15"
+                        Foreground="{ThemeResource AccentFillColorDefaultBrush}"
+                        HorizontalAlignment="Left"
+                        VerticalAlignment="Top"
+                        Visibility="{Binding ShowFavoriteBadge, Mode=OneWay, Converter={StaticResource BoolToVisibility}}"
+                        ToolTipService.ToolTip="已收藏" />
                     <Button
                         x:Name="HoverCopyButton"
                         Content="复制图片"
@@ -113,7 +123,7 @@
                     <MenuFlyoutItem Text="复制品牌" Click="OnMenuCopyBrandClick" />
                     <MenuFlyoutItem Text="复制完整信息" Click="OnMenuCopyFullInfoClick" />
                     <MenuFlyoutSeparator />
-                    <MenuFlyoutItem Text="加入收藏" Click="OnMenuFavoriteClick">
+                    <MenuFlyoutItem x:Name="MenuFavorite" Click="OnMenuFavoriteClick">
                         <MenuFlyoutItem.Icon>
                             <FontIcon Glyph="&#xE734;" />
                         </MenuFlyoutItem.Icon>
