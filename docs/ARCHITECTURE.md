@@ -102,7 +102,7 @@ mijia-product-gallery/
 
 ## 4. 数据库设计（SQLite + EF Core 10）
 
-库文件：`%LOCALAPPDATA%\MijiaProductGallery\database\mijia.db`（WAL 模式）。
+库文件：`%LOCALAPPDATA%\MijiaProductGallery\database\gallery.db`（WAL 模式）。详细数据库设计（ER、索引、迁移、恢复）以 [DATABASE.md](DATABASE.md) 为准。
 
 ```
 Products ──1:1── ProductUsages        Collections ──1:N── CollectionItems ──N:1── Products
