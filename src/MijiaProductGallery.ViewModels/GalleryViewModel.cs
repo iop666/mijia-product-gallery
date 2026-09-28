@@ -95,6 +95,30 @@ public partial class GalleryViewModel : ObservableObject
     /// <summary>是否有任何激活的筛选（含关键字）。</summary>
     public bool HasActiveChips => ActiveChips.Count > 0;
 
+    /// <summary>是否处于随机浏览模式（临时状态，不持久化）。</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(RandomBannerText))]
+    private bool isRandomMode;
+
+    /// <summary>随机模式本会话累计已展示产品数。</summary>
+    [ObservableProperty]
+    private int randomShownCount;
+
+    /// <summary>随机模式还有更多可展示（用于禁用"换一批"）。</summary>
+    [ObservableProperty]
+    private bool randomExhausted;
+
+    /// <summary>随机横幅文本。</summary>
+    public string RandomBannerText => IsRandomMode
+        ? RandomExhausted
+            ? $"🎲 随机浏览 · 本会话已展示全部 {RandomShownCount} 个产品"
+            : $"🎲 随机浏览 · 已展示 {RandomShownCount} 个产品"
+        : string.Empty;
+
+    private long? randomCursor;
+
+    private List<string> shownModels = [];
+
     public bool IsLoadingVisible => State == GalleryLoadState.Loading;
 
     public bool IsEmptyVisible => State == GalleryLoadState.Empty;
@@ -133,6 +157,7 @@ public partial class GalleryViewModel : ObservableObject
     /// <summary>立即执行搜索（绕过防抖，用于建议提交与回车）。</summary>
     public void ApplySearchImmediate(string keyword)
     {
+        ExitRandomCore();
         // 经属性赋值会触发一次防抖路径，但世代计数使其过期，立即执行的结果最终生效。
         SearchText = keyword;
         searchGeneration++;
@@ -142,6 +167,7 @@ public partial class GalleryViewModel : ObservableObject
     /// <summary>应用显式排序（null = 恢复默认），立即执行并持久化。</summary>
     public void ApplySort(ProductSort? sort)
     {
+        ExitRandomCore();
         Sort = sort;
         _ = PersistSortSafeAsync(sort);
         searchGeneration++;
@@ -180,6 +206,50 @@ public partial class GalleryViewModel : ObservableObject
         }
     }
 
+    /// <summary>进入随机浏览模式：从头抽取一批（关键字/筛选照常生效），排除本会话已展示。</summary>
+    public void EnterRandomMode()
+    {
+        ExitRandomCore();
+        IsRandomMode = true;
+        searchGeneration++;
+        _ = ExecuteAsync(SearchText ?? string.Empty, searchGeneration);
+    }
+
+    /// <summary>换一批：游标推进到本批最大随机键之后，排除已展示型号继续抽取。</summary>
+    public void RefreshRandom()
+    {
+        if (!IsRandomMode)
+        {
+            EnterRandomMode();
+            return;
+        }
+
+        searchGeneration++;
+        _ = ExecuteAsync(SearchText ?? string.Empty, searchGeneration);
+    }
+
+    /// <summary>退出随机浏览：恢复正常排序与筛选视图。</summary>
+    public void ExitRandomMode()
+    {
+        if (!IsRandomMode)
+        {
+            return;
+        }
+
+        ExitRandomCore();
+        searchGeneration++;
+        _ = ExecuteAsync(SearchText ?? string.Empty, searchGeneration);
+    }
+
+    private void ExitRandomCore()
+    {
+        IsRandomMode = false;
+        randomCursor = null;
+        shownModels = [];
+        RandomShownCount = 0;
+        RandomExhausted = false;
+    }
+
     /// <summary>清除全部筛选与搜索（单次重查；排序为视图偏好，保留）。</summary>
     public void ClearAllFilters()
     {
@@ -195,6 +265,7 @@ public partial class GalleryViewModel : ObservableObject
 
     private void OnFilterChanged()
     {
+        ExitRandomCore();
         if (suppressFilterChanged)
         {
             return;
@@ -258,7 +329,44 @@ public partial class GalleryViewModel : ObservableObject
                 Filter = FilterPane.BuildFilter(),
                 Sort = Sort,
             };
-            var rows = await queryService.QueryAsync(query, cancellationToken);
+            IReadOnlyList<Product> rows;
+            if (IsRandomMode)
+            {
+                query = new ProductQuery
+                {
+                    Keyword = query.Keyword,
+                    Filter = query.Filter,
+                    Mode = BrowseMode.Random,
+                    RandomCursor = randomCursor,
+                    RandomLimit = 20,
+                    ExcludeModels = [.. shownModels],
+                };
+                rows = await queryService.QueryAsync(query, cancellationToken);
+
+                // 游标推进到本批最大随机键；会话累计已展示；空结果表示已全部展示。
+                if (generation != searchGeneration)
+                {
+                    return;
+                }
+
+                var last = rows.Count == 0 ? null : rows.Max(product => product.RandomKey);
+                if (last is { } lastValue)
+                {
+                    randomCursor = lastValue + 1;
+                    shownModels.AddRange(rows.Select(product => product.Model));
+                    RandomShownCount = shownModels.Count;
+                    RandomExhausted = false;
+                }
+                else
+                {
+                    RandomExhausted = true;
+                }
+
+                await ReplaceCardsAsync(rows, cancellationToken);
+                return;
+            }
+
+            rows = await queryService.QueryAsync(query, cancellationToken);
 
             if (generation != searchGeneration)
             {

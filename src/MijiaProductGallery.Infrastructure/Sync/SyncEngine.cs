@@ -321,6 +321,7 @@ public sealed class SyncEngine(
                     UpdateTimeUnix = remote.UpdateTimeUnix,
                     FirstSeenUnix = NowUnix(),
                     LastSeenUnix = NowUnix(),
+                    RandomKey = Random.Shared.NextInt64(),
                 };
                 if (reviewImages.TryGetValue(change.Model, out var bytes))
                 {

@@ -18,6 +18,20 @@ public sealed class BoolToVisibilityConverter : Microsoft.UI.Xaml.Data.IValueCon
     }
 }
 
+/// <summary>布尔反转 → Visibility 转换器（true 折叠）。</summary>
+public sealed class InverseBoolToVisibilityConverter : Microsoft.UI.Xaml.Data.IValueConverter
+{
+    public object Convert(object value, Type targetType, object parameter, string language)
+    {
+        return value is true ? Visibility.Collapsed : Visibility.Visible;
+    }
+
+    public object ConvertBack(object value, Type targetType, object parameter, string language)
+    {
+        throw new NotSupportedException();
+    }
+}
+
 /// <summary>缩略图磁盘路径 → BitmapImage 转换器（空路径返回 null）。</summary>
 public sealed class PathToImageConverter : Microsoft.UI.Xaml.Data.IValueConverter
 {

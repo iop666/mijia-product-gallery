@@ -172,6 +172,37 @@ public sealed class SeedLiveTests
             var defaultModels = byDefault.Select(product => product.Model).ToList();
             Assert.Equal(defaultModels.OrderBy(model => model, StringComparer.Ordinal).ToList(), defaultModels);
             output.WriteLine($"[sort] 默认型号排序 → {defaultModels.Count}");
+
+            // 随机浏览：真实 10,547 产品上三批 20 个，无重复且均满足筛选。
+            var randomService = new ProductQueryService(
+                new TestDbContextFactory(() => host.CreateContext()),
+                new FilterService(),
+                new SortService());
+            var shown = new List<string>();
+            long? cursor = null;
+            for (var round = 0; round < 3; round++)
+            {
+                var batch = await randomService.QueryAsync(new ProductQuery
+                {
+                    Keyword = "小米",
+                    Filter = new ProductFilter { Categories = ["环境电器"] },
+                    Mode = BrowseMode.Random,
+                    RandomCursor = cursor,
+                    RandomLimit = 20,
+                    ExcludeModels = shown,
+                });
+                output.WriteLine($"[random] 第 {round + 1} 批 → {batch.Count}（会话已展示 {shown.Count}）");
+                Assert.All(batch, product => Assert.DoesNotContain(product.Model, shown));
+                Assert.All(batch, product => Assert.Equal("环境电器", product.Category));
+                shown.AddRange(batch.Select(product => product.Model));
+                cursor = batch.Count == 0 ? cursor : batch.Max(product => product.RandomKey!.Value);
+                if (batch.Count < 20)
+                {
+                    break;
+                }
+            }
+
+            Assert.True(shown.Count > 0);
         }
         finally
         {

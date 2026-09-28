@@ -57,4 +57,10 @@ public sealed class Product
 
     /// <summary>最近一次在官网见到的时间（Unix 秒）。</summary>
     public long LastSeenUnix { get; set; }
+
+    /// <summary>
+    /// 随机浏览游标键（种子导入/同步新增时生成一次，终身不变；null 待启动回填）。
+    /// 非官方数据、非用户数据：纯本地派生键，同步不读取也不覆盖。
+    /// </summary>
+    public long? RandomKey { get; set; }
 }

@@ -353,6 +353,7 @@ public sealed class SeedImporter(GalleryDbContext dbContext, DatabasePaths paths
                     Brand = entry.Brand,
                     Category = entry.Category,
                     FirstSeenUnix = now,
+                    RandomKey = Random.Shared.NextInt64(),
                 };
                 AssignOfficialFields(product, entry, now);
                 existingRows[entry.Model] = product;

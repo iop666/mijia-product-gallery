@@ -74,6 +74,16 @@ public sealed class ProductFilter
     }
 }
 
+/// <summary>浏览模式：随机浏览是独立模式，不是排序规则。</summary>
+public enum BrowseMode
+{
+    /// <summary>常规浏览（按 Sort/默认排序）。</summary>
+    Normal,
+
+    /// <summary>随机浏览（按 RandomKey 游标抽取，会话内排除已展示）。</summary>
+    Random,
+}
+
 /// <summary>图库查询：搜索关键字与筛选条件的组合（交集语义），Sort 为显式排序。</summary>
 public sealed class ProductQuery
 {
@@ -82,6 +92,18 @@ public sealed class ProductQuery
 
     public ProductFilter? Filter { get; init; }
 
-    /// <summary>显式排序；null = 默认（有关键字按命中优先级，无关键字按型号）。</summary>
+    /// <summary>显式排序；null = 默认（有关键字按命中优先级，无关键字按型号）。仅 Normal 模式生效。</summary>
     public ProductSort? Sort { get; init; }
+
+    /// <summary>浏览模式（默认 Normal）。</summary>
+    public BrowseMode Mode { get; init; } = BrowseMode.Normal;
+
+    /// <summary>随机游标起点（RandomKey >= cursor）；null 表示从头开始。</summary>
+    public long? RandomCursor { get; init; }
+
+    /// <summary>随机批次大小（默认 20）。</summary>
+    public int RandomLimit { get; init; } = 20;
+
+    /// <summary>本会话已展示型号（随机回卷时排除）。</summary>
+    public IReadOnlyList<string>? ExcludeModels { get; init; }
 }

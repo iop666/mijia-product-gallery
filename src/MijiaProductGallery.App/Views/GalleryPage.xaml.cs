@@ -188,6 +188,21 @@ public sealed partial class GalleryPage : Page
         }
     }
 
+    private void OnRandomEnterClick(object sender, RoutedEventArgs e)
+    {
+        vm?.EnterRandomMode();
+    }
+
+    private void OnRandomRefreshClick(object sender, RoutedEventArgs e)
+    {
+        vm?.RefreshRandom();
+    }
+
+    private void OnRandomExitClick(object sender, RoutedEventArgs e)
+    {
+        vm?.ExitRandomMode();
+    }
+
     private void OnFilterToggleClick(object sender, RoutedEventArgs e)
     {
         if (vm is null)

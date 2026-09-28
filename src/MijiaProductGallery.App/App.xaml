@@ -10,6 +10,7 @@
             </ResourceDictionary.MergedDictionaries>
             <converters:BoolToVisibilityConverter x:Key="BoolToVisibility" />
             <converters:PathToImageConverter x:Key="PathToImage" />
+            <converters:InverseBoolToVisibilityConverter x:Key="InverseBool" />
         </ResourceDictionary>
     </Application.Resources>
 </Application>
