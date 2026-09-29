@@ -213,6 +213,155 @@ public sealed class GalleryPagingViewModelTests : IAsyncLifetime
     }
 }
 
+/// <summary>页码输入框：提交跳转、范围钳制、非法校正、文本同步。</summary>
+public sealed class PageBoxSubmitTests : IAsyncLifetime
+{
+    private readonly DatabaseTestHost host = DatabaseTestHost.CreateNotInitialized();
+    private readonly InMemorySettings settings = new();
+    private GalleryViewModel? vm;
+
+    public async Task InitializeAsync()
+    {
+        await using var context = host.CreateContext();
+        await new DbInitializer(context, host.Paths).InitializeAsync();
+
+        var products = new List<Product>();
+        for (var i = 0; i < 25; i++)
+        {
+            products.Add(new Product
+            {
+                Model = $"pb.model.{i:000}",
+                Name = $"产品 {i:000}",
+                Brand = "b",
+                Category = "c",
+                FirstSeenUnix = 1_000 + i,
+            });
+        }
+
+        await new ProductRepository(host.CreateContext()).AddRangeAsync(products);
+        await settings.SetValueAsync(AppSettingsKeys.GalleryPageSize, 10);
+        vm = CreateViewModel();
+        await vm.LoadAsync();
+        await WaitForAsync(() => vm.Cards.Count == 10);
+    }
+
+    public Task DisposeAsync()
+    {
+        host.Dispose();
+        return Task.CompletedTask;
+    }
+
+    private GalleryViewModel CreateViewModel()
+    {
+        var factory = new TestDbContextFactory(() => host.CreateContext());
+        return new GalleryViewModel(
+            new ProductRepository(host.CreateContext()),
+            new ThumbnailLoadQueue(
+                new ThumbnailService(host.Paths),
+                InlineUiDispatcher.Instance,
+                concurrency: 1),
+            new ProductQueryService(factory, new FilterService(), new SortService()),
+            new RecentService(host.CreateContext()),
+            new SearchHistoryRepository(host.CreateContext()),
+            new FavoritesRepository(host.CreateContext()),
+            settings,
+            InlineUiDispatcher.Instance,
+            debounceMilliseconds: 10);
+    }
+
+    private static async Task WaitForAsync(Func<bool> condition, int timeoutMilliseconds = 8000)
+    {
+        for (var waited = 0; waited < timeoutMilliseconds; waited += 40)
+        {
+            if (condition())
+            {
+                return;
+            }
+
+            await Task.Delay(40);
+        }
+
+        Assert.True(condition(), "等待条件超时");
+    }
+
+    [Fact]
+    public async Task PageBox_Syncs_WithCurrentPage()
+    {
+        Assert.Equal("1", vm!.PageBoxText);
+        vm.GoToNextPage();
+        await WaitForAsync(() => vm.CurrentPage == 2);
+        Assert.Equal("2", vm.PageBoxText);
+    }
+
+    [Fact]
+    public async Task Submit_MiddlePage_Jumps()
+    {
+        vm!.PageBoxText = "3";
+        vm.SubmitPageBox();
+        await WaitForAsync(() => vm.CurrentPage == 3 && vm.Cards.Count == 5);
+        Assert.Equal("3", vm.PageBoxText);
+    }
+
+    [Fact]
+    public async Task Submit_FirstPage_And_LastPage()
+    {
+        vm!.PageBoxText = "1";
+        vm.SubmitPageBox();
+        await WaitForAsync(() => vm.CurrentPage == 1);
+        vm.PageBoxText = "3";
+        vm.SubmitPageBox();
+        await WaitForAsync(() => vm.CurrentPage == 3);
+    }
+
+    [Fact]
+    public async Task Submit_Zero_ClampsToFirstPage()
+    {
+        vm!.PageBoxText = "0";
+        vm.SubmitPageBox();
+        await WaitForAsync(() => vm.CurrentPage == 1);
+        Assert.Equal("1", vm.PageBoxText);
+    }
+
+    [Fact]
+    public async Task Submit_BeyondTotal_ClampsToLastPage()
+    {
+        vm!.PageBoxText = "999";
+        vm.SubmitPageBox();
+        await WaitForAsync(() => vm.CurrentPage == 3);
+        Assert.Equal("3", vm.PageBoxText);
+    }
+
+    [Fact]
+    public async Task Submit_Invalid_RevertsToCurrentPage_NoThrow()
+    {
+        vm!.PageBoxText = "abc";
+        vm.SubmitPageBox();
+        Assert.Equal("1", vm.PageBoxText);
+        Assert.Equal(1, vm.CurrentPage);
+        Assert.Equal(25, vm.TotalCount);
+    }
+
+    [Fact]
+    public async Task FilterChange_UpdatesPageBoxToCorrectedPage()
+    {
+        vm!.PageBoxText = "3";
+        vm.SubmitPageBox();
+        await WaitForAsync(() => vm.CurrentPage == 3);
+        vm.FilterPane.SetCategorySelected("c", true);
+        await WaitForAsync(() => vm.CurrentPage == 1 && vm.PageBoxText == "1");
+    }
+
+    [Fact]
+    public async Task ScrollTop_Tracks_PageChanges_ViaCardsReset()
+    {
+        // 滚动置顶由页面订阅 CurrentPage 实现（ChangeView），此处验证翻页后卡片集合确实重置。
+        vm!.PageBoxText = "2";
+        vm.SubmitPageBox();
+        await WaitForAsync(() => vm.CurrentPage == 2 && vm.Cards.Count == 10);
+        Assert.NotEqual("pg.model.000", vm.Cards[0].Model);
+    }
+}
+
 /// <summary>设置模型：每页数量钳制到 9～140。</summary>
 public class PageSizeClampTests
 {

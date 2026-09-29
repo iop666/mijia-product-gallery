@@ -11,6 +11,10 @@
         <KeyboardAccelerator Key="Escape" Invoked="OnEscapeInvoked" />
         <KeyboardAccelerator Key="Left" Invoked="OnPageNavInvoked" />
         <KeyboardAccelerator Key="Right" Invoked="OnPageNavInvoked" />
+        <KeyboardAccelerator Key="PageUp" Invoked="OnPageNavInvoked" />
+        <KeyboardAccelerator Key="PageDown" Invoked="OnPageNavInvoked" />
+        <KeyboardAccelerator Key="Home" Invoked="OnPageNavInvoked" />
+        <KeyboardAccelerator Key="End" Invoked="OnPageNavInvoked" />
     </Page.KeyboardAccelerators>
 
     <Page.Resources>
@@ -207,12 +211,18 @@
                         Content="上一页"
                         Click="OnPrevPageClick"
                         IsEnabled="{x:Bind Vm.CanGoPrevPage, Mode=OneWay}" />
-                    <TextBlock
-                        Text="{x:Bind Vm.PagerText, Mode=OneWay}"
-                        VerticalAlignment="Center"
-                        MinWidth="170"
+                    <TextBlock Text="第" VerticalAlignment="Center" FontSize="13" />
+                    <TextBox
+                        x:Name="PageBox"
+                        Text="{x:Bind Vm.PageBoxText, Mode=OneWay}"
+                        MinWidth="48"
                         TextAlignment="Center"
-                        FontSize="13" />
+                        AutomationProperties.Name="页码跳转输入"
+                        KeyDown="OnPageBoxKeyDown"
+                        LostFocus="OnPageBoxLostFocus" />
+                    <TextBlock Text="/" VerticalAlignment="Center" FontSize="13" />
+                    <TextBlock Text="{x:Bind Vm.TotalPages, Mode=OneWay}" VerticalAlignment="Center" FontSize="13" />
+                    <TextBlock Text="页" VerticalAlignment="Center" FontSize="13" />
                     <Button
                         Content="下一页"
                         Click="OnNextPageClick"

@@ -347,6 +347,23 @@ public sealed partial class GalleryPage : Page
         }
     }
 
+    /// <summary>页码框 Enter：提交跳转并全选便于连续输入。</summary>
+    private void OnPageBoxKeyDown(object sender, Microsoft.UI.Xaml.Input.KeyRoutedEventArgs e)
+    {
+        if (e.Key == Windows.System.VirtualKey.Enter)
+        {
+            e.Handled = true;
+            vm?.SubmitPageBox();
+            PageBox.SelectAll();
+        }
+    }
+
+    /// <summary>页码框失焦：非法/越界输入校正回当前页。</summary>
+    private void OnPageBoxLostFocus(object sender, RoutedEventArgs e)
+    {
+        vm?.SubmitPageBox();
+    }
+
     private void OnFirstPageClick(object sender, RoutedEventArgs e) => vm?.GoToFirstPage();
 
     private void OnPrevPageClick(object sender, RoutedEventArgs e) => vm?.GoToPrevPage();
@@ -355,30 +372,61 @@ public sealed partial class GalleryPage : Page
 
     private void OnLastPageClick(object sender, RoutedEventArgs e) => vm?.GoToLastPage();
 
-    /// <summary>左右方向键翻页：焦点在文本输入或卡片网格内时交还原生行为。</summary>
+    /// <summary>
+    /// 分页键盘（仅分页模式）：
+    /// 左/右——上一页/下一页（文本输入与卡片网格内交还原生焦点导航）；
+    /// PageUp/PageDown——上一页/下一页（文本输入时交还编辑）；
+    /// Home/End——第一页/最后一页（文本输入时交还编辑）；
+    /// 无上/下页时不产生动作，也不重复查询。
+    /// </summary>
     private void OnPageNavInvoked(Microsoft.UI.Xaml.Input.KeyboardAccelerator sender,
         Microsoft.UI.Xaml.Input.KeyboardAcceleratorInvokedEventArgs args)
     {
-        var isLeft = sender.Key == Windows.System.VirtualKey.Left;
-        var isRight = sender.Key == Windows.System.VirtualKey.Right;
         if (vm is null || !vm.IsPagedMode || vm.IsRandomMode)
         {
             return;
         }
 
         var focused = Microsoft.UI.Xaml.Input.FocusManager.GetFocusedElement(XamlRoot);
-        if (focused is TextBox or AutoSuggestBox
-            || IsDescendantOf(focused as Microsoft.UI.Xaml.DependencyObject, CardsScroll))
+        if (focused is TextBox or AutoSuggestBox)
         {
+            // 文本编辑（搜索/品牌/页码框）：全部按键交还原生编辑行为。
             return;
         }
 
-        if (isLeft && vm.CanGoPrevPage)
+        var inCards = IsDescendantOf(focused as Microsoft.UI.Xaml.DependencyObject, CardsScroll);
+        var goPrev = false;
+        var goNext = false;
+        switch (sender.Key)
+        {
+            case Windows.System.VirtualKey.Left when !inCards && vm.CanGoPrevPage:
+                goPrev = true;
+                break;
+            case Windows.System.VirtualKey.Right when !inCards && vm.CanGoNextPage:
+                goNext = true;
+                break;
+            case Windows.System.VirtualKey.PageUp when vm.CanGoPrevPage:
+                goPrev = true;
+                break;
+            case Windows.System.VirtualKey.PageDown when vm.CanGoNextPage:
+                goNext = true;
+                break;
+            case Windows.System.VirtualKey.Home when vm.CanGoFirstPage:
+                vm.GoToFirstPage();
+                args.Handled = true;
+                return;
+            case Windows.System.VirtualKey.End when vm.CanGoLastPage:
+                vm.GoToLastPage();
+                args.Handled = true;
+                return;
+        }
+
+        if (goPrev)
         {
             vm.GoToPrevPage();
             args.Handled = true;
         }
-        else if (isRight && vm.CanGoNextPage)
+        else if (goNext)
         {
             vm.GoToNextPage();
             args.Handled = true;

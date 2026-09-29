@@ -136,17 +136,17 @@ public partial class GalleryViewModel : ObservableObject
 
     /// <summary>当前页码（1 起）；条件变化自动回到第 1 页。</summary>
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(CanGoFirstPage), nameof(CanGoPrevPage), nameof(PagerText))]
+    [NotifyPropertyChangedFor(nameof(CanGoFirstPage), nameof(CanGoPrevPage), nameof(PageBoxText))]
     private int currentPage = 1;
 
     /// <summary>满足当前条件的总产品数（数据库侧 COUNT，与当前页行数无关）。</summary>
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(IsPagerVisible), nameof(CanGoNextPage), nameof(CanGoLastPage), nameof(PagerText))]
+    [NotifyPropertyChangedFor(nameof(IsPagerVisible), nameof(CanGoNextPage), nameof(CanGoLastPage))]
     private int totalCount;
 
     /// <summary>总页数（按每页数量向上取整）。</summary>
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(IsPagerVisible), nameof(CanGoNextPage), nameof(CanGoLastPage), nameof(PagerText))]
+    [NotifyPropertyChangedFor(nameof(IsPagerVisible), nameof(CanGoNextPage), nameof(CanGoLastPage))]
     private int totalPages = 1;
 
     /// <summary>分页栏可见性：分页模式且非随机浏览且有结果。</summary>
@@ -160,9 +160,30 @@ public partial class GalleryViewModel : ObservableObject
 
     public bool CanGoLastPage => CanGoNextPage;
 
-    public string PagerText => TotalCount > 0
-        ? $"第 {CurrentPage} / {TotalPages} 页 · 共 {TotalCount:N0} 个产品"
-        : string.Empty;
+    /// <summary>页码输入框文本（双向：跳转输入 / 当前页同步）。</summary>
+    [ObservableProperty]
+    private string pageBoxText = "1";
+
+    /// <summary>提交页码输入：合法值钳制到 1～总页数后跳转；非法值校正回当前页。</summary>
+    public void SubmitPageBox()
+    {
+        if (!IsPagedMode)
+        {
+            return;
+        }
+
+        if (int.TryParse(
+                PageBoxText?.Trim(),
+                System.Globalization.NumberStyles.Integer,
+                System.Globalization.CultureInfo.InvariantCulture,
+                out var page))
+        {
+            GoToPage(page);
+        }
+
+        // 合法跳转后同步为新页码；非法/越界校正回当前页。
+        PageBoxText = CurrentPage.ToString();
+    }
 
     /// <summary>是否处于随机浏览模式（临时状态，不持久化）。</summary>
     [ObservableProperty]
@@ -508,6 +529,7 @@ public partial class GalleryViewModel : ObservableObject
     private void ResetPaging()
     {
         CurrentPage = 1;
+        PageBoxText = "1";
     }
 
     /// <summary>页码跳转（钳制到有效范围后重新执行当前条件的对应页）。</summary>
@@ -525,6 +547,7 @@ public partial class GalleryViewModel : ObservableObject
         }
 
         CurrentPage = target;
+        PageBoxText = target.ToString();
         searchGeneration++;
         _ = ExecuteAsync(SearchText ?? string.Empty, searchGeneration);
     }
@@ -654,6 +677,7 @@ public partial class GalleryViewModel : ObservableObject
                 {
                     // 数据变化导致当前页失效：收敛到最后一页并重查（空结果保持第 1 页）。
                     CurrentPage = Math.Max(1, totalPages);
+                    PageBoxText = CurrentPage.ToString();
                     page = await queryService.QueryPageAsync(
                         query, (CurrentPage - 1) * pageSize, pageSize, cancellationToken);
                     if (generation != searchGeneration)
