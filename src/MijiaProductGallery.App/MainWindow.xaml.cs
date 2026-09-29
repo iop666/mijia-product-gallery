@@ -35,9 +35,24 @@ public sealed partial class MainWindow : Window
         Title = "米家产品示例图库";
         AppWindow.SetIcon(Path.Combine(AppContext.BaseDirectory, "app.ico"));
         ApplyTitleBarTheme(App.InitialTheme);
+        ApplyRootBackground(App.InitialTheme);
         App.Services.GetRequiredService<SettingsViewModel>().ThemeChanged += OnThemeChanged;
         Nav.Loaded += OnLoaded;
         Nav.SizeChanged += OnNavSizeChanged;
+    }
+
+    /// <summary>导航根部铺不透明的主题底色：窗口级背景资源跟随启动主题，
+    /// 不透明底色使接缝处不再透出启动时的深色/浅色窗口底。</summary>
+    private void ApplyRootBackground(string theme)
+    {
+        var argb = theme switch
+        {
+            "Dark" => 0xFF1C1C1C,
+            "Gray" => 0xFF3B3B3B,
+            _ => 0xFFFFFFFF,
+        };
+        Nav.Background = new Microsoft.UI.Xaml.Media.SolidColorBrush(Windows.UI.Color.FromArgb(
+            (byte)(argb >> 24), (byte)(argb >> 16), (byte)(argb >> 8), (byte)argb));
     }
 
     /// <summary>窗口最小逻辑尺寸 900×600：过小时回弹到最小尺寸，保证布局稳定。</summary>
