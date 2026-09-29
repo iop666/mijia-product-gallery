@@ -39,15 +39,32 @@
                     <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
-                <TextBlock
+                <StackPanel
                     Grid.Column="0"
-                    Text="{Binding ResultSummary, Mode=OneWay}"
-                    FontSize="13"
-                    VerticalAlignment="Center"
-                    Margin="0,0,8,0"
-                    TextTrimming="CharacterEllipsis"
-                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                    Visibility="{Binding HasResultSummary, Mode=OneWay, Converter={StaticResource BoolToVisibility}}" />
+                    Orientation="Horizontal"
+                    Spacing="8"
+                    VerticalAlignment="Center">
+                    <TextBlock
+                        Text="{Binding ResultSummary, Mode=OneWay}"
+                        FontSize="13"
+                        VerticalAlignment="Center"
+                        Margin="0,0,8,0"
+                        TextTrimming="CharacterEllipsis"
+                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                        Visibility="{Binding HasResultSummary, Mode=OneWay, Converter={StaticResource BoolToVisibility}}" />
+                    <ComboBox
+                        x:Name="CollectionBox"
+                        MinWidth="150"
+                        ItemsSource="{Binding Collections, Mode=OneWay}"
+                        SelectedItem="{Binding SelectedCollection, Mode=TwoWay}"
+                        DisplayMemberPath="Name"
+                        ToolTipService.ToolTip="选择要查看的收藏夹（默认项为星标收藏）"
+                        Visibility="{Binding IsFavoritesMode, Mode=OneWay, Converter={StaticResource BoolToVisibility}}" />
+                    <Button
+                        Content="管理收藏夹"
+                        Click="OnManageCollectionsClick"
+                        Visibility="{Binding IsFavoritesMode, Mode=OneWay, Converter={StaticResource BoolToVisibility}}" />
+                </StackPanel>
                 <Button
                     Grid.Column="1"
                     Click="OnRandomEnterClick"

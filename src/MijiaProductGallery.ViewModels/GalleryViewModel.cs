@@ -57,6 +57,7 @@ public partial class GalleryViewModel : ObservableObject
     private readonly ISearchHistoryRepository searchHistory;
     private readonly IFavoritesRepository favorites;
     private readonly ISettingsRepository settings;
+    private readonly ICollectionRepository? collections;
     private readonly ThumbnailLoadQueue thumbnailQueue;
     private readonly IUiDispatcher uiDispatcher;
     private readonly int debounceMilliseconds;
@@ -73,7 +74,8 @@ public partial class GalleryViewModel : ObservableObject
         IFavoritesRepository favorites,
         ISettingsRepository settings,
         IUiDispatcher uiDispatcher,
-        int debounceMilliseconds = 500)
+        int debounceMilliseconds = 500,
+        ICollectionRepository? collections = null)
     {
         this.products = products;
         this.thumbnailQueue = thumbnailQueue;
@@ -82,6 +84,7 @@ public partial class GalleryViewModel : ObservableObject
         this.searchHistory = searchHistory;
         this.favorites = favorites;
         this.settings = settings;
+        this.collections = collections;
         this.uiDispatcher = uiDispatcher;
         this.debounceMilliseconds = debounceMilliseconds;
         FilterPane = new FilterPaneViewModel(settings);
@@ -105,6 +108,16 @@ public partial class GalleryViewModel : ObservableObject
     private GalleryMode mode = GalleryMode.Normal;
 
     public bool IsFavoritesMode => Mode == GalleryMode.Favorites;
+
+    /// <summary>收藏夹切换列表（首项固定为默认星标收藏；进入收藏视图时刷新）。</summary>
+    public ObservableCollection<CollectionOption> Collections { get; } = [];
+
+    /// <summary>当前选中的收藏夹（默认项 = 星标收藏语义）。</summary>
+    [ObservableProperty]
+    private CollectionOption? selectedCollection = CollectionOption.Default;
+
+    /// <summary>ReloadCollectionsAsync 重建列表期间抑制切换重查。</summary>
+    internal bool suppressCollectionChanged;
 
     private HashSet<int> favoriteIds = new();
 
@@ -308,14 +321,14 @@ public partial class GalleryViewModel : ObservableObject
         }
     }
 
-    /// <summary>进入收藏视图：查询固定叠加 IsFavorite=true（与随机模式互斥）。</summary>
+    /// <summary>进入收藏视图：刷新收藏夹列表后执行查询（默认项叠加 IsFavorite，选中合集走 CollectionId）。</summary>
     public void EnterFavoritesMode()
     {
         ExitRandomCore();
         ResetPaging();
         Mode = GalleryMode.Favorites;
         searchGeneration++;
-        _ = ExecuteAsync(SearchText ?? string.Empty, searchGeneration);
+        _ = ReloadCollectionsAndExecuteAsync(searchGeneration);
     }
 
     /// <summary>退出收藏视图（回到全部产品）。</summary>
@@ -335,6 +348,63 @@ public partial class GalleryViewModel : ObservableObject
     private void ExitFavoritesCore()
     {
         Mode = GalleryMode.Normal;
+    }
+
+    /// <summary>收藏夹切换：回第 1 页并按所选合集重查（默认项回到星标收藏语义）。</summary>
+    partial void OnSelectedCollectionChanged(CollectionOption? value)
+    {
+        if (suppressCollectionChanged || Mode != GalleryMode.Favorites)
+        {
+            return;
+        }
+
+        ResetPaging();
+        searchGeneration++;
+        _ = ExecuteAsync(SearchText ?? string.Empty, searchGeneration);
+    }
+
+    /// <summary>载入收藏夹列表；保持原选择，所选合集已被删除时回落默认并重查。</summary>
+    public async Task ReloadCollectionsAsync(CancellationToken cancellationToken = default)
+    {
+        if (collections is null)
+        {
+            return;
+        }
+
+        var rows = await collections.GetAllAsync(cancellationToken);
+        var previousId = SelectedCollection?.Id ?? 0;
+        var options = new List<CollectionOption> { CollectionOption.Default };
+        options.AddRange(rows.Select(row => new CollectionOption(row.Id, row.Name)));
+        var match = options.FirstOrDefault(option => option.Id == previousId) ?? CollectionOption.Default;
+
+        suppressCollectionChanged = true;
+        Collections.Clear();
+        foreach (var option in options)
+        {
+            Collections.Add(option);
+        }
+
+        SelectedCollection = match;
+        suppressCollectionChanged = false;
+
+        if (match.Id != previousId && Mode == GalleryMode.Favorites)
+        {
+            // 所选合集已被删除：回落默认收藏并重查一次。
+            ResetPaging();
+            searchGeneration++;
+            await ExecuteAsync(SearchText ?? string.Empty, searchGeneration, cancellationToken);
+        }
+    }
+
+    private async Task ReloadCollectionsAndExecuteAsync(int generation)
+    {
+        await ReloadCollectionsAsync();
+        if (generation != searchGeneration)
+        {
+            return;
+        }
+
+        await ExecuteAsync(SearchText ?? string.Empty, generation);
     }
 
     /// <summary>切换收藏状态（用户数据）：更新卡片角标；收藏视图下产品即时移出列表。</summary>
@@ -365,6 +435,12 @@ public partial class GalleryViewModel : ObservableObject
         if (chipId == "fav")
         {
             ExitFavoritesMode();
+            return;
+        }
+
+        if (chipId == "collection")
+        {
+            SelectedCollection = CollectionOption.Default;
             return;
         }
 
@@ -581,7 +657,8 @@ public partial class GalleryViewModel : ObservableObject
         try
         {
             var filter = FilterPane.BuildFilter();
-            if (Mode == GalleryMode.Favorites)
+            var collectionId = Mode == GalleryMode.Favorites ? SelectedCollection?.Id : null;
+            if (Mode == GalleryMode.Favorites && collectionId is null or 0)
             {
                 filter ??= new ProductFilter();
                 filter.IsFavorite = true;
@@ -592,6 +669,7 @@ public partial class GalleryViewModel : ObservableObject
                 Keyword = string.IsNullOrWhiteSpace(keyword) ? null : keyword,
                 Filter = filter,
                 Sort = Sort,
+                CollectionId = collectionId is > 0 ? collectionId : null,
             };
             IReadOnlyList<Product> rows;
             IsPagedMode = await ResolvePagedModeAsync(cancellationToken);
@@ -738,13 +816,23 @@ public partial class GalleryViewModel : ObservableObject
         }
     }
 
-    private static string? BuildSummary(ProductQuery query, int count)
+    /// <summary>当前选中的收藏夹名称（默认项为 null，走星标收藏语义）。</summary>
+    private string? CurrentCollectionName =>
+        Mode == GalleryMode.Favorites && SelectedCollection is { IsDefault: false } selected
+            ? selected.Name
+            : null;
+
+    private string? BuildSummary(ProductQuery query, int count)
     {
-        var prefix = query.Filter?.IsFavorite == true ? "收藏 · " : null;
+        var collectionName = CurrentCollectionName;
+        var prefix = collectionName is not null
+            ? $"收藏夹「{collectionName}」 · "
+            : query.Filter?.IsFavorite == true ? "收藏 · " : null;
         if (string.IsNullOrWhiteSpace(query.Keyword))
         {
             return count == 0
-                ? (query.Filter?.IsFavorite == true ? "暂无收藏产品" : null)
+                ? (collectionName is not null ? $"收藏夹「{collectionName}」暂无产品"
+                    : query.Filter?.IsFavorite == true ? "暂无收藏产品" : null)
                 : $"{prefix}共 {count} 个产品";
         }
 
@@ -758,7 +846,9 @@ public partial class GalleryViewModel : ObservableObject
         ActiveChips.Clear();
         if (Mode == GalleryMode.Favorites)
         {
-            ActiveChips.Add(new FilterChip("fav", "收藏"));
+            ActiveChips.Add(CurrentCollectionName is { } collectionName
+                ? new FilterChip("collection", $"收藏夹: {collectionName}")
+                : new FilterChip("fav", "收藏"));
         }
 
         if (!string.IsNullOrWhiteSpace(query.Keyword))

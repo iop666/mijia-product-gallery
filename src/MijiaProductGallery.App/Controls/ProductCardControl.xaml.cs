@@ -6,6 +6,7 @@ using Microsoft.UI.Xaml.Input;
 using MijiaProductGallery.App.Views;
 using MijiaProductGallery.Core.Enums;
 using MijiaProductGallery.Core.Interfaces;
+using MijiaProductGallery.Core.Models;
 using MijiaProductGallery.ViewModels;
 using Windows.ApplicationModel.DataTransfer;
 using Windows.Storage;
@@ -25,11 +26,11 @@ public sealed partial class ProductCardControl : UserControl
     /// <summary>拖拽已被外部接收（Explorer/图像软件），应当 DragCount+1。</summary>
     public event EventHandler<ProductCard>? DragCompleted;
 
-    /// <summary>右键"加入收藏"请求。</summary>
-    public event EventHandler<ProductCard>? FavoriteRequested;
-
     /// <summary>动作失败（需要 UI 提示错误状态）。</summary>
     public event EventHandler<string>? ActionFailed;
+
+    /// <summary>动作成功提示（需要 UI 提示信息状态）。</summary>
+    public event EventHandler<string>? ActionInfo;
 
     /// <summary>尝试拖拽无图型号（需要 UI 提示不可拖拽状态）。</summary>
     public event EventHandler<ProductCard>? NotDraggableRequested;
@@ -64,6 +65,8 @@ public sealed partial class ProductCardControl : UserControl
 
     private IImageStore ImageStore => App.Services.GetRequiredService<IImageStore>();
 
+    private ICollectionRepository Collections => App.Services.GetRequiredService<ICollectionRepository>();
+
     public ProductCard? Card
     {
         get => card;
@@ -77,12 +80,80 @@ public sealed partial class ProductCardControl : UserControl
         }
     }
 
-    /// <summary>右键菜单不在根元素子树内，打开时显式对齐当前主题。</summary>
+    /// <summary>右键菜单不在根元素子树内，打开时显式对齐当前主题；"添加到收藏夹"按当前数据重建。</summary>
     private void OnMenuFlyoutOpening(object? sender, object e)
     {
         if (sender is Microsoft.UI.Xaml.Controls.Primitives.FlyoutBase flyout)
         {
             ThemeManager.ApplyToFlyout(flyout);
+        }
+
+        PopulateCollectionMenu();
+    }
+
+    /// <summary>重建"添加到收藏夹"子菜单（异步取列表；已加入项禁用标记）。</summary>
+    private void PopulateCollectionMenu()
+    {
+        MenuAddToCollection.Items.Clear();
+        if (Card is null)
+        {
+            return;
+        }
+
+        _ = PopulateCollectionMenuCoreAsync(Card.ProductId);
+    }
+
+    private async Task PopulateCollectionMenuCoreAsync(int productId)
+    {
+        List<Collection> rows;
+        try
+        {
+            rows = [.. await Collections.GetAllAsync()];
+        }
+        catch (Exception exception) when (exception is UnauthorizedAccessException or InvalidOperationException or COMException)
+        {
+            return;
+        }
+
+        if (rows.Count == 0)
+        {
+            MenuAddToCollection.Items.Add(new MenuFlyoutItem
+            {
+                Text = "暂无收藏夹（收藏视图可管理）",
+                IsEnabled = false,
+            });
+            return;
+        }
+
+        foreach (var row in rows)
+        {
+            var joined = (await Collections.GetProductIdsAsync(row.Id)).Contains(productId);
+            var item = new MenuFlyoutItem
+            {
+                Text = joined ? $"{row.Name}（已加入）" : row.Name,
+                IsEnabled = !joined,
+            };
+            var collectionId = row.Id;
+            item.Click += (_, _) => _ = AddToCollectionAsync(collectionId, row.Name);
+            MenuAddToCollection.Items.Add(item);
+        }
+    }
+
+    private async Task AddToCollectionAsync(int collectionId, string name)
+    {
+        if (Card is null)
+        {
+            return;
+        }
+
+        try
+        {
+            await Collections.AddItemAsync(collectionId, Card.ProductId, DateTimeOffset.UtcNow.ToUnixTimeSeconds());
+            ActionInfo?.Invoke(this, $"已添加到收藏夹「{name}」");
+        }
+        catch (Exception exception) when (exception is UnauthorizedAccessException or InvalidOperationException or COMException)
+        {
+            ActionFailed?.Invoke(this, $"添加到收藏夹失败：{exception.Message}");
         }
     }
 
@@ -337,11 +408,21 @@ public sealed partial class ProductCardControl : UserControl
         CopyText(CardTextKind.FullInfo);
     }
 
-    private void OnMenuFavoriteClick(object sender, RoutedEventArgs e)
+    private async void OnMenuFavoriteClick(object sender, RoutedEventArgs e)
     {
-        if (Card is not null)
+        if (Card is null)
         {
-            FavoriteRequested?.Invoke(this, Card);
+            return;
+        }
+
+        try
+        {
+            Card.IsFavorite = await Favorites.ToggleAsync(Card.ProductId);
+            UpdateMenuStates();
+        }
+        catch (Exception exception) when (exception is UnauthorizedAccessException or InvalidOperationException or COMException)
+        {
+            ActionFailed?.Invoke(this, $"收藏切换失败：{exception.Message}");
         }
     }
 }

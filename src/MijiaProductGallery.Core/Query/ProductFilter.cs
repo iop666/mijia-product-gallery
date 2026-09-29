@@ -96,6 +96,9 @@ public sealed class ProductQuery
 
     public ProductFilter? Filter { get; init; }
 
+    /// <summary>收藏夹过滤（仅收藏视图选择具体合集时非空；null/默认项走 IsFavorite 语义）。</summary>
+    public int? CollectionId { get; init; }
+
     /// <summary>显式排序；null = 默认（有关键字按命中优先级，无关键字按型号）。仅 Normal 模式生效。</summary>
     public ProductSort? Sort { get; init; }
 

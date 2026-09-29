@@ -3,6 +3,7 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
 using MijiaProductGallery.Core.Enums;
+using MijiaProductGallery.Core.Models;
 using MijiaProductGallery.Core.Query;
 using MijiaProductGallery.App.Controls;
 using MijiaProductGallery.Core.Interfaces;
@@ -17,7 +18,6 @@ namespace MijiaProductGallery.App.Views;
 public sealed partial class GalleryPage : Page
 {
     private GalleryViewModel? vm;
-    private readonly CardActionService cardActions;
     private readonly IUsageService usage;
 
     public GalleryViewModel Vm => vm ?? throw new InvalidOperationException("图库视图模型尚未初始化");
@@ -27,7 +27,6 @@ public sealed partial class GalleryPage : Page
         InitializeComponent();
         vm = viewModel;
         DataContext = viewModel;
-        cardActions = App.Services.GetRequiredService<CardActionService>();
         usage = App.Services.GetRequiredService<IUsageService>();
         Loaded += OnLoaded;
         CardsRepeater.ElementPrepared += OnElementPrepared;
@@ -107,8 +106,8 @@ public sealed partial class GalleryPage : Page
         control.InteractionWired = true;
         control.DetailRequested += OnCardDetailRequested;
         control.DragCompleted += OnCardDragCompleted;
-        control.FavoriteRequested += OnCardFavoriteRequested;
         control.ActionFailed += OnCardActionFailed;
+        control.ActionInfo += OnCardActionInfo;
         control.NotDraggableRequested += OnCardNotDraggable;
     }
 
@@ -155,20 +154,189 @@ public sealed partial class GalleryPage : Page
         _ = usage.RecordAsync(card.ProductId, UsageType.Drag, DateTimeOffset.UtcNow.ToUnixTimeSeconds());
     }
 
-    private async void OnCardFavoriteRequested(object? sender, ProductCard card)
-    {
-        // 经 FavoriteService 切换收藏（幂等，用户数据）。
-        await cardActions.ToggleFavoriteAsync(card);
-    }
-
     private void OnCardActionFailed(object? sender, string message)
     {
         ShowNotice(message, InfoBarSeverity.Error);
     }
 
+    private void OnCardActionInfo(object? sender, string message)
+    {
+        ShowNotice(message);
+    }
+
     private void OnCardNotDraggable(object? sender, ProductCard card)
     {
         ShowNotice($"「{card.Name}」无图片，不能拖拽");
+    }
+
+    /// <summary>管理收藏夹：新建/重命名/删除（行内二级态，避免对话框叠加）。</summary>
+    private async void OnManageCollectionsClick(object sender, RoutedEventArgs e)
+    {
+        var collections = App.Services.GetRequiredService<ICollectionRepository>();
+        var nameBox = new TextBox { PlaceholderText = "输入新收藏夹名称", MinWidth = 220 };
+        var createButton = new Button { Content = "新建" };
+        var createRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
+        createRow.Children.Add(nameBox);
+        createRow.Children.Add(createButton);
+
+        var listPanel = new StackPanel { Spacing = 4 };
+
+        var dialog = new ContentDialog
+        {
+            Title = "管理收藏夹",
+            XamlRoot = XamlRoot,
+            RequestedTheme = ThemeManager.ToElementTheme(ThemeManager.CurrentTheme),
+            Content = new StackPanel { Spacing = 12, Children = { createRow, listPanel } },
+            CloseButtonText = "完成",
+            DefaultButton = ContentDialogButton.Close,
+        };
+
+        async Task RefreshListAsync()
+        {
+            listPanel.Children.Clear();
+            IReadOnlyList<Collection> rows;
+            try
+            {
+                rows = await collections.GetAllAsync();
+            }
+            catch (System.Runtime.InteropServices.COMException)
+            {
+                return;
+            }
+
+            if (rows.Count == 0)
+            {
+                listPanel.Children.Add(new TextBlock
+                {
+                    Text = "暂无自定义收藏夹",
+                    Opacity = 0.6,
+                    FontSize = 12,
+                });
+                return;
+            }
+
+            foreach (var row in rows)
+            {
+                listPanel.Children.Add(BuildCollectionRow(collections, row, RefreshListAsync));
+            }
+        }
+
+        createButton.Click += async (_, _) =>
+        {
+            var name = nameBox.Text.Trim();
+            if (name.Length == 0)
+            {
+                return;
+            }
+
+            try
+            {
+                await collections.CreateAsync(name, DateTimeOffset.UtcNow.ToUnixTimeSeconds());
+                nameBox.Text = string.Empty;
+                _ = Vm.ReloadCollectionsAsync();
+            }
+            catch (Exception exception) when (exception is UnauthorizedAccessException
+                or InvalidOperationException
+                or System.Runtime.InteropServices.COMException)
+            {
+                ShowNotice($"新建收藏夹失败：{exception.Message}", InfoBarSeverity.Error);
+            }
+
+            await RefreshListAsync();
+        };
+
+        _ = RefreshListAsync();
+        _ = await dialog.ShowAsync();
+    }
+
+    /// <summary>收藏夹管理行：名称 | 重命名 | 删除；行内进入重命名/确认删除二级态。</summary>
+    private StackPanel BuildCollectionRow(
+        ICollectionRepository collections,
+        Collection row,
+        Func<Task> refresh)
+    {
+        var panel = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6 };
+        var nameText = new TextBlock
+        {
+            Text = row.Name,
+            VerticalAlignment = VerticalAlignment.Center,
+            MaxWidth = 200,
+            TextTrimming = TextTrimming.CharacterEllipsis,
+        };
+        var renameButton = new Button { Content = "重命名" };
+        var deleteButton = new Button { Content = "删除" };
+        panel.Children.Add(nameText);
+        panel.Children.Add(renameButton);
+        panel.Children.Add(deleteButton);
+
+        renameButton.Click += (_, _) =>
+        {
+            var box = new TextBox { Text = row.Name, MinWidth = 180 };
+            var save = new Button { Content = "保存" };
+            var cancel = new Button { Content = "取消" };
+            panel.Children.Clear();
+            panel.Children.Add(box);
+            panel.Children.Add(save);
+            panel.Children.Add(cancel);
+            save.Click += async (_, _) =>
+            {
+                var newName = box.Text.Trim();
+                if (newName.Length == 0 || newName == row.Name)
+                {
+                    await refresh();
+                    return;
+                }
+
+                try
+                {
+                    await collections.RenameAsync(row.Id, newName, DateTimeOffset.UtcNow.ToUnixTimeSeconds());
+                    _ = Vm.ReloadCollectionsAsync();
+                }
+                catch (Exception exception) when (exception is UnauthorizedAccessException
+                    or InvalidOperationException
+                    or System.Runtime.InteropServices.COMException)
+                {
+                    ShowNotice($"重命名失败：{exception.Message}", InfoBarSeverity.Error);
+                }
+
+                await refresh();
+            };
+            cancel.Click += (_, _) => _ = refresh();
+        };
+
+        deleteButton.Click += (_, _) =>
+        {
+            var confirmText = new TextBlock
+            {
+                Text = $"删除「{row.Name}」？产品本身不受影响",
+                VerticalAlignment = VerticalAlignment.Center,
+            };
+            var confirm = new Button { Content = "确认删除" };
+            var cancel = new Button { Content = "取消" };
+            panel.Children.Clear();
+            panel.Children.Add(confirmText);
+            panel.Children.Add(confirm);
+            panel.Children.Add(cancel);
+            confirm.Click += async (_, _) =>
+            {
+                try
+                {
+                    await collections.DeleteAsync(row.Id);
+                    _ = Vm.ReloadCollectionsAsync();
+                }
+                catch (Exception exception) when (exception is UnauthorizedAccessException
+                    or InvalidOperationException
+                    or System.Runtime.InteropServices.COMException)
+                {
+                    ShowNotice($"删除失败：{exception.Message}", InfoBarSeverity.Error);
+                }
+
+                await refresh();
+            };
+            cancel.Click += (_, _) => _ = refresh();
+        };
+
+        return panel;
     }
 
     private void ShowNotice(string message, InfoBarSeverity severity = InfoBarSeverity.Informational)

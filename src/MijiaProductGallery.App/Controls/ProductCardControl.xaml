@@ -118,6 +118,9 @@
             <Border.ContextFlyout>
                 <MenuFlyout x:Name="CardContextMenu" Opening="OnMenuFlyoutOpening">
                     <MenuFlyoutSubItem Text="复制">
+                        <MenuFlyoutSubItem.Icon>
+                            <FontIcon Glyph="&#xE8C8;" />
+                        </MenuFlyoutSubItem.Icon>
                         <MenuFlyoutItem x:Name="MenuCopyImage" Text="复制图片" Click="OnMenuCopyImageClick">
                             <MenuFlyoutItem.Icon>
                                 <FontIcon Glyph="&#xE8C8;" />
@@ -144,6 +147,11 @@
                                 <FontIcon Glyph="&#xE8C8;" />
                             </MenuFlyoutItem.Icon>
                         </MenuFlyoutItem>
+                    </MenuFlyoutSubItem>
+                    <MenuFlyoutSubItem x:Name="MenuAddToCollection" Text="添加到收藏夹">
+                        <MenuFlyoutSubItem.Icon>
+                            <FontIcon Glyph="&#xE8B7;" />
+                        </MenuFlyoutSubItem.Icon>
                     </MenuFlyoutSubItem>
                     <MenuFlyoutItem x:Name="MenuFavorite" Click="OnMenuFavoriteClick">
                         <MenuFlyoutItem.Icon>
