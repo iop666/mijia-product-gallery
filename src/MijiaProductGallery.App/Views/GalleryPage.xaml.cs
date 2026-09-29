@@ -156,7 +156,7 @@ public sealed partial class GalleryPage : Page
         }
     }
 
-    /// <summary>左键单击：ViewCount+1，并打开详情对话框（完整详情页另行提供）。</summary>
+    /// <summary>左键单击：ViewCount+1，并打开详情对话框。</summary>
     private async void OnCardDetailRequested(object? sender, ProductCard card)
     {
         try
@@ -172,7 +172,7 @@ public sealed partial class GalleryPage : Page
         {
             XamlRoot = XamlRoot,
             RequestedTheme = ThemeManager.ToElementTheme(ThemeManager.CurrentTheme),
-            Title = "产品详情（占位）",
+            Title = "产品详情",
             CloseButtonText = "关闭",
             Content = new StackPanel
             {

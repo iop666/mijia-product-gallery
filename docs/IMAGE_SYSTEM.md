@@ -1,7 +1,7 @@
 # 本地图片资源系统 · IMAGE_SYSTEM.md
 
 > 适用：mijia-product-gallery 图片目录管理、原图生命周期、.old 链、缩略图缓存
-> 数据规范依据：TIOPWXNL-mijia-product-icons Skill §3/§4（扩展名按文件头判定、.old 链、aux 保留名）
+> 数据规范依据：mijia-product-icons 数据仓库规范（扩展名按文件头判定、.old 链、aux 保留名）
 > 实现位置：`Infrastructure/Images/`（`ImageStore`、`ThumbnailService`）+ `Core/Rules/ImageHeaderRules`
 
 ---
@@ -51,7 +51,7 @@
 
 验证失败 → 删除临时文件并抛出异常，**既有原图保证一个字节不变**。
 
-三个入口（与对比规则一一对应，Phase 4 同步引擎只做映射）：
+三个入口（与对比规则一一对应，同步引擎只做映射）：
 
 | 入口 | 对应变更 | 磁盘行为 |
 |---|---|---|
@@ -59,7 +59,7 @@
 | `ReplaceAsync(model, currentFile, stream)` | 官方换图（NameChanged/ImageChanged） | 同 SHA → Unchanged；SHA 不同 → 新图经安全链**原地替换**原文件名，旧图不留存 |
 | `ReplaceWithHistoryAsync(model, currentFile, stream)` | ID 复用 | 同 SHA → Unchanged；SHA 不同 → 旧图 `File.Move` 进 .old 链链尾，新图占用原文件名；返回 `ReplacedByOldFileName` |
 
-## 4. .old 链（冻结，与 Skill §4 一致）
+## 4. .old 链（冻结）
 
 链式追加、永不洗牌，`.old` 后缀无数字者最早；新被替换的图取最大代数 +1：
 
@@ -97,7 +97,7 @@
 | 完整性 | 头部合法后必须完整解码成功（拦住伪图、截断、坏块） |
 | 上限 | 20 MB（超出拒绝，正常样图 ≈ 0.1–0.5 MB） |
 
-## 7. 测试矩阵（Phase 3 验收范围）
+## 7. 测试矩阵
 
 | 类别 | 用例 |
 |---|---|
@@ -110,4 +110,4 @@
 
 ## 8. 与数据库的衔接
 
-图片系统只管磁盘与字节，**不写数据库**；返回的 `ImageStoreResult`（ImageFileName / ImagePath / 格式 / 尺寸 / 字节数 / SHA256 / 旧图去向）由同步引擎（Phase 4）与 Seed 导入（Phase 5）经仓储的官方列白名单落库，保持"文件先行、元数据随后"的一致顺序。
+图片系统只管磁盘与字节，**不写数据库**；返回的 `ImageStoreResult`（ImageFileName / ImagePath / 格式 / 尺寸 / 字节数 / SHA256 / 旧图去向）由同步引擎与 Seed 导入经仓储的官方列白名单落库，保持"文件先行、元数据随后"的一致顺序。

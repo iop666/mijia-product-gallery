@@ -17,7 +17,7 @@ public enum CardTextKind
 /// <summary>
 /// 卡片动作服务：复制图片/文本/完整信息（经系统剪贴板）与使用计数。
 /// 图片复制失败（文件缺失/剪贴板占用）必须返回错误状态，绝不静默。
-/// 复制成功一律 CopyCount+1；收藏请求只抛出事件（收藏系统在后续阶段实现）。
+/// 复制成功一律 CopyCount+1；收藏请求只抛出事件，由订阅方处理。
 /// </summary>
 public partial class CardActionService : ObservableObject
 {
@@ -40,7 +40,7 @@ public partial class CardActionService : ObservableObject
         return favorites.ToggleAsync(card.ProductId, cancellationToken);
     }
 
-    /// <summary>收藏请求事件（用户数据，Phase 12 实现持久化）。</summary>
+    /// <summary>收藏请求事件（用户数据，持久化由订阅方完成）。</summary>
     public event Action<ProductCard>? FavoriteRequested;
 
     public async Task<CardActionResult> CopyImageAsync(ProductCard card, CancellationToken cancellationToken = default)

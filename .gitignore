@@ -31,3 +31,7 @@ seed-*.zip
 # Test results
 TestResults/
 *.trx
+
+# 内部开发过程文档（不公开）
+/docs/ARCHITECTURE.md
+/docs/RISKS.md
