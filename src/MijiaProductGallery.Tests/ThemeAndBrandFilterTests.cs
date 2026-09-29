@@ -27,7 +27,7 @@ public class ThemePaletteDefinitionTests
     {
         var palette = ThemePaletteDefinition.For("Gray");
         Assert.True(palette.Count > 0);
-        Assert.Equal(0xFF2D2D2Du, palette["ApplicationPageBackgroundThemeBrush"]);
+        Assert.Equal(0xFF3B3B3Bu, palette["ApplicationPageBackgroundThemeBrush"]);
     }
 
     [Fact]
