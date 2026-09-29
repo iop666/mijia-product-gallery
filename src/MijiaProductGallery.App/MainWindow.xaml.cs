@@ -147,6 +147,12 @@ public sealed partial class MainWindow : Window
         var dbInitializer = App.Services.GetRequiredService<DbInitializer>();
         await dbInitializer.InitializeAsync();
 
+        // 设置页修改每页数量/浏览模式后，图库以新参数重新加载第 1 页。
+        var settingsViewModel = App.Services.GetRequiredService<SettingsViewModel>();
+        var galleryInstance = App.Services.GetRequiredService<GalleryViewModel>();
+        settingsViewModel.PageSizeChanged += size => DispatcherQueue.TryEnqueue(() => galleryInstance.OnBrowseSettingsChanged());
+        settingsViewModel.BrowseModeChanged += _ => DispatcherQueue.TryEnqueue(() => galleryInstance.OnBrowseSettingsChanged());
+
         var products = App.Services.GetRequiredService<IProductRepository>();
         var hasProducts = await products.CountAsync() > 0;
         if (hasProducts)

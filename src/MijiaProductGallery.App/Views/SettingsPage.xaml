@@ -34,6 +34,30 @@
                 <TextBlock Text="图库" FontSize="18" FontWeight="SemiBold" />
                 <StackPanel Orientation="Horizontal" Spacing="10">
                     <StackPanel Spacing="4">
+                        <TextBlock Text="浏览模式" FontSize="13" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                        <ComboBox x:Name="BrowseModeBox" MinWidth="160" DropDownOpened="OnComboOpening" SelectionChanged="OnBrowseModeSelectionChanged">
+                            <ComboBoxItem Content="分页（默认）" />
+                            <ComboBoxItem Content="连续滚动" />
+                        </ComboBox>
+                    </StackPanel>
+                    <StackPanel Spacing="4">
+                        <TextBlock Text="每页显示数量（9–140）" FontSize="13" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                        <ComboBox x:Name="PageSizeBox" MinWidth="160" DropDownOpened="OnComboOpening" SelectionChanged="OnPageSizeSelectionChanged">
+                            <ComboBoxItem Content="9" />
+                            <ComboBoxItem Content="12" />
+                            <ComboBoxItem Content="15" />
+                            <ComboBoxItem Content="21" />
+                            <ComboBoxItem Content="28" />
+                            <ComboBoxItem Content="35" />
+                            <ComboBoxItem Content="56" />
+                            <ComboBoxItem Content="70" />
+                            <ComboBoxItem Content="105" />
+                            <ComboBoxItem Content="140" />
+                        </ComboBox>
+                    </StackPanel>
+                </StackPanel>
+                <StackPanel Orientation="Horizontal" Spacing="10">
+                    <StackPanel Spacing="4">
                         <TextBlock Text="缩略图最长边（120–960 px）" FontSize="13" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
                         <TextBox x:Name="ThumbEdgeBox" MinWidth="120" />
                     </StackPanel>

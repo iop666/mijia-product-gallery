@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using CommunityToolkit.Mvvm.ComponentModel;
+using MijiaProductGallery.Core;
 using MijiaProductGallery.Core.Enums;
 using MijiaProductGallery.Core.Interfaces;
 using MijiaProductGallery.Core.Models;
@@ -108,7 +109,7 @@ public partial class GalleryViewModel : ObservableObject
     private HashSet<int> favoriteIds = new();
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(IsLoadingVisible), nameof(IsEmptyVisible), nameof(IsErrorVisible), nameof(IsReadyVisible))]
+    [NotifyPropertyChangedFor(nameof(IsLoadingVisible), nameof(IsEmptyVisible), nameof(IsErrorVisible), nameof(IsReadyVisible), nameof(IsPagerVisible))]
     private GalleryLoadState state = GalleryLoadState.Loading;
 
     [ObservableProperty]
@@ -128,9 +129,44 @@ public partial class GalleryViewModel : ObservableObject
     /// <summary>是否有任何激活的筛选（含关键字）。</summary>
     public bool HasActiveChips => ActiveChips.Count > 0;
 
+    /// <summary>浏览模式：分页（默认）/连续滚动。每次执行查询时从持久化设置解析。</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsPagerVisible))]
+    private bool isPagedMode = true;
+
+    /// <summary>当前页码（1 起）；条件变化自动回到第 1 页。</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CanGoFirstPage), nameof(CanGoPrevPage), nameof(PagerText))]
+    private int currentPage = 1;
+
+    /// <summary>满足当前条件的总产品数（数据库侧 COUNT，与当前页行数无关）。</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsPagerVisible), nameof(CanGoNextPage), nameof(CanGoLastPage), nameof(PagerText))]
+    private int totalCount;
+
+    /// <summary>总页数（按每页数量向上取整）。</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsPagerVisible), nameof(CanGoNextPage), nameof(CanGoLastPage), nameof(PagerText))]
+    private int totalPages = 1;
+
+    /// <summary>分页栏可见性：分页模式且非随机浏览且有结果。</summary>
+    public bool IsPagerVisible => IsPagedMode && !IsRandomMode && State == GalleryLoadState.Ready && TotalCount > 0;
+
+    public bool CanGoFirstPage => IsPagedMode && CurrentPage > 1;
+
+    public bool CanGoPrevPage => CanGoFirstPage;
+
+    public bool CanGoNextPage => IsPagedMode && CurrentPage < TotalPages;
+
+    public bool CanGoLastPage => CanGoNextPage;
+
+    public string PagerText => TotalCount > 0
+        ? $"第 {CurrentPage} / {TotalPages} 页 · 共 {TotalCount:N0} 个产品"
+        : string.Empty;
+
     /// <summary>是否处于随机浏览模式（临时状态，不持久化）。</summary>
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(RandomBannerText))]
+    [NotifyPropertyChangedFor(nameof(RandomBannerText), nameof(IsPagerVisible))]
     private bool isRandomMode;
 
     /// <summary>随机模式本会话累计已展示产品数。</summary>
@@ -192,6 +228,7 @@ public partial class GalleryViewModel : ObservableObject
     public void ApplySearchImmediate(string keyword)
     {
         ExitRandomCore();
+        ResetPaging();
         // 经属性赋值会触发一次防抖路径，但世代计数使其过期，立即执行的结果最终生效。
         SearchText = keyword;
         searchGeneration++;
@@ -202,6 +239,7 @@ public partial class GalleryViewModel : ObservableObject
     public void ApplySort(ProductSort? sort)
     {
         ExitRandomCore();
+        ResetPaging();
         Sort = sort;
         _ = PersistSortSafeAsync(sort);
         searchGeneration++;
@@ -212,6 +250,7 @@ public partial class GalleryViewModel : ObservableObject
     public void EnterRecentMode()
     {
         ExitRandomCore();
+        ResetPaging();
         ExitFavoritesCore();
         Mode = GalleryMode.Recent;
         searchGeneration++;
@@ -227,6 +266,7 @@ public partial class GalleryViewModel : ObservableObject
         }
 
         Mode = GalleryMode.Normal;
+        ResetPaging();
         searchGeneration++;
         _ = ExecuteAsync(SearchText ?? string.Empty, searchGeneration);
     }
@@ -246,6 +286,7 @@ public partial class GalleryViewModel : ObservableObject
     public void EnterFavoritesMode()
     {
         ExitRandomCore();
+        ResetPaging();
         Mode = GalleryMode.Favorites;
         searchGeneration++;
         _ = ExecuteAsync(SearchText ?? string.Empty, searchGeneration);
@@ -260,6 +301,7 @@ public partial class GalleryViewModel : ObservableObject
         }
 
         ExitFavoritesCore();
+        ResetPaging();
         searchGeneration++;
         _ = ExecuteAsync(SearchText ?? string.Empty, searchGeneration);
     }
@@ -333,6 +375,7 @@ public partial class GalleryViewModel : ObservableObject
     public void EnterRandomMode()
     {
         ExitRandomCore();
+        ResetPaging();
         IsRandomMode = true;
         searchGeneration++;
         _ = ExecuteAsync(SearchText ?? string.Empty, searchGeneration);
@@ -359,6 +402,7 @@ public partial class GalleryViewModel : ObservableObject
             return;
         }
 
+        ResetPaging();
         ExitRandomCore();
         searchGeneration++;
         _ = ExecuteAsync(SearchText ?? string.Empty, searchGeneration);
@@ -376,6 +420,7 @@ public partial class GalleryViewModel : ObservableObject
     /// <summary>清除全部筛选与搜索（单次重查；排序为视图偏好，保留）。</summary>
     public void ClearAllFilters()
     {
+        ResetPaging();
         suppressFilterChanged = true;
         SearchText = string.Empty;
         FilterPane.Reset();
@@ -389,6 +434,7 @@ public partial class GalleryViewModel : ObservableObject
     private void OnFilterChanged()
     {
         ExitRandomCore();
+        ResetPaging();
         if (suppressFilterChanged)
         {
             return;
@@ -400,6 +446,7 @@ public partial class GalleryViewModel : ObservableObject
 
     private void ResetDimension(string chipId)
     {
+        ResetPaging();
         suppressFilterChanged = true;
         switch (chipId)
         {
@@ -429,6 +476,7 @@ public partial class GalleryViewModel : ObservableObject
 
     private async Task SearchDebouncedAsync(string keyword)
     {
+        ResetPaging();
         searchGeneration++;
         var generation = searchGeneration;
         await Task.Delay(debounceMilliseconds);
@@ -438,6 +486,63 @@ public partial class GalleryViewModel : ObservableObject
         }
 
         await ExecuteAsync(keyword, generation);
+    }
+
+    /// <summary>从持久化设置解析每页数量（9～140，默认 21）。</summary>
+    private async Task<int> ResolvePageSizeAsync(CancellationToken cancellationToken)
+    {
+        var value = await settings.GetValueAsync(
+            AppSettingsKeys.GalleryPageSize, AppSettingsKeys.GalleryPageSizeDefault, cancellationToken);
+        return Math.Clamp(value, AppSettingsKeys.GalleryPageSizeMin, AppSettingsKeys.GalleryPageSizeMax);
+    }
+
+    /// <summary>从持久化设置解析浏览模式（Paged 默认 / Continuous）。</summary>
+    private async Task<bool> ResolvePagedModeAsync(CancellationToken cancellationToken)
+    {
+        var mode = await settings.GetValueAsync(
+            AppSettingsKeys.GalleryBrowseMode, AppSettingsKeys.GalleryBrowseModeDefault, cancellationToken);
+        return mode != "Continuous";
+    }
+
+    /// <summary>条件变化：回到第 1 页（搜索/筛选/排序/模式切换共用）。</summary>
+    private void ResetPaging()
+    {
+        CurrentPage = 1;
+    }
+
+    /// <summary>页码跳转（钳制到有效范围后重新执行当前条件的对应页）。</summary>
+    public void GoToPage(int page)
+    {
+        if (!IsPagedMode)
+        {
+            return;
+        }
+
+        var target = Math.Clamp(page, 1, Math.Max(1, TotalPages));
+        if (target == CurrentPage)
+        {
+            return;
+        }
+
+        CurrentPage = target;
+        searchGeneration++;
+        _ = ExecuteAsync(SearchText ?? string.Empty, searchGeneration);
+    }
+
+    public void GoToFirstPage() => GoToPage(1);
+
+    public void GoToLastPage() => GoToPage(TotalPages);
+
+    public void GoToPrevPage() => GoToPage(CurrentPage - 1);
+
+    public void GoToNextPage() => GoToPage(CurrentPage + 1);
+
+    /// <summary>设置页修改每页数量/浏览模式后触发：以新参数重新执行第 1 页。</summary>
+    public void OnBrowseSettingsChanged()
+    {
+        ResetPaging();
+        searchGeneration++;
+        _ = ExecuteAsync(SearchText ?? string.Empty, searchGeneration);
     }
 
     private async Task ExecuteAsync(string keyword, int generation, CancellationToken cancellationToken = default)
@@ -460,6 +565,7 @@ public partial class GalleryViewModel : ObservableObject
                 Sort = Sort,
             };
             IReadOnlyList<Product> rows;
+            IsPagedMode = await ResolvePagedModeAsync(cancellationToken);
             if (IsRandomMode)
             {
                 query = new ProductQuery
@@ -499,6 +605,26 @@ public partial class GalleryViewModel : ObservableObject
             if (Mode == GalleryMode.Recent)
             {
                 // 最近使用：UsageEvents 聚合视图，不走常规 Sort 管线。
+                if (IsPagedMode)
+                {
+                    var pageSizeRecent = await ResolvePageSizeAsync(cancellationToken);
+                    var recentPage = await recentService.GetRecentPageAsync(
+                        (CurrentPage - 1) * pageSizeRecent, pageSizeRecent, cancellationToken);
+                    if (generation != searchGeneration)
+                    {
+                        return;
+                    }
+
+                    TotalCount = recentPage.TotalCount;
+                    TotalPages = Math.Max(1, recentPage.TotalPages(pageSizeRecent));
+                    ResultSummary = TotalCount == 0
+                        ? "暂无使用记录"
+                        : $"最近使用 · 共 {TotalCount:N0} 个产品";
+                    ActiveChips.Clear();
+                    await ReplaceRecentCardsAsync(recentPage.Items, cancellationToken);
+                    return;
+                }
+
                 var recentRows = await recentService.GetRecentAsync(RecentLimit, cancellationToken);
                 if (generation != searchGeneration)
                 {
@@ -511,20 +637,59 @@ public partial class GalleryViewModel : ObservableObject
                 return;
             }
 
-            rows = await queryService.QueryAsync(query, cancellationToken);
+            int totalCount;
+            if (IsPagedMode)
+            {
+                // 分页模式：COUNT 与 Skip/Take 均在数据库侧执行，仅当前页行被物化。
+                var pageSize = await ResolvePageSizeAsync(cancellationToken);
+                var page = await queryService.QueryPageAsync(
+                    query, (CurrentPage - 1) * pageSize, pageSize, cancellationToken);
+                if (generation != searchGeneration)
+                {
+                    return;
+                }
+
+                var totalPages = page.TotalPages(pageSize);
+                if (CurrentPage > totalPages)
+                {
+                    // 数据变化导致当前页失效：收敛到最后一页并重查（空结果保持第 1 页）。
+                    CurrentPage = Math.Max(1, totalPages);
+                    page = await queryService.QueryPageAsync(
+                        query, (CurrentPage - 1) * pageSize, pageSize, cancellationToken);
+                    if (generation != searchGeneration)
+                    {
+                        return;
+                    }
+                }
+
+                TotalCount = page.TotalCount;
+                TotalPages = totalPages;
+                totalCount = page.TotalCount;
+                rows = page.Items;
+            }
+            else
+            {
+                rows = await queryService.QueryAsync(query, cancellationToken);
+                if (generation != searchGeneration)
+                {
+                    return;
+                }
+
+                totalCount = rows.Count;
+            }
 
             if (generation != searchGeneration)
             {
                 return;
             }
 
-            ResultSummary = BuildSummary(query, rows.Count);
+            ResultSummary = BuildSummary(query, totalCount);
             RebuildChips(query);
             await ReplaceCardsAsync(rows, cancellationToken, favoriteIds);
 
             if (query.Keyword is not null)
             {
-                await RecordHistorySafeAsync(query.Keyword, rows.Count, cancellationToken);
+                await RecordHistorySafeAsync(query.Keyword, totalCount, cancellationToken);
             }
         }
         catch (OperationCanceledException)

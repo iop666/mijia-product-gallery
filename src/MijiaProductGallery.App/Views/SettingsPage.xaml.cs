@@ -51,6 +51,25 @@ public sealed partial class SettingsPage : Page
             "Recent" => 2,
             _ => 0,
         };
+        BrowseModeBox.SelectedIndex = vm.BrowseMode switch
+        {
+            "Continuous" => 1,
+            _ => 0,
+        };
+        PageSizeBox.SelectedIndex = vm.PageSize switch
+        {
+            9 => 0,
+            12 => 1,
+            15 => 2,
+            21 => 3,
+            28 => 4,
+            35 => 5,
+            56 => 6,
+            70 => 7,
+            105 => 8,
+            140 => 9,
+            _ => 3,
+        };
         SyncIntervalBox.SelectedIndex = vm.AutoInterval switch
         {
             SyncAutoInterval.Off => 0,
@@ -85,6 +104,37 @@ public sealed partial class SettingsPage : Page
             "灰色" => "Gray",
             _ => "System",
         };
+    }
+
+    private void OnBrowseModeSelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (suppressSelectionEvents)
+        {
+            return;
+        }
+
+        vm.BrowseMode = ((ComboBoxItem)((ComboBox)sender).SelectedItem).Content switch
+        {
+            "连续滚动" => "Continuous",
+            _ => "Paged",
+        };
+    }
+
+    private void OnPageSizeSelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (suppressSelectionEvents)
+        {
+            return;
+        }
+
+        if (int.TryParse(
+                ((ComboBoxItem)((ComboBox)sender).SelectedItem).Content as string,
+                System.Globalization.NumberStyles.Integer,
+                System.Globalization.CultureInfo.InvariantCulture,
+                out var size))
+        {
+            vm.PageSize = size;
+        }
     }
 
     private void OnLaunchViewSelectionChanged(object sender, SelectionChangedEventArgs e)

@@ -29,4 +29,10 @@ public interface IProductQueryService
 {
     /// <summary>执行组合查询（数据库侧过滤与排序）。</summary>
     Task<IReadOnlyList<Product>> QueryAsync(ProductQuery query, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// 分页执行组合查询：COUNT 与 Skip/Take 均在数据库侧完成，
+    /// 仅当前页行被物化。随机模式不分页，退化为全量批量查询（总数以返回行数为准）。
+    /// </summary>
+    Task<ProductPageResult> QueryPageAsync(ProductQuery query, int skip, int take, CancellationToken cancellationToken = default);
 }

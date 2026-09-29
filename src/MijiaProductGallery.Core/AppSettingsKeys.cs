@@ -11,6 +11,10 @@ public static class AppSettingsKeys
     public const string ThumbMaxEdge = "Library.ThumbMaxEdge";
     public const string ThumbQuality = "Library.ThumbQuality";
 
+    // 图库（浏览模式与分页）
+    public const string GalleryBrowseMode = "Gallery.BrowseMode";
+    public const string GalleryPageSize = "Gallery.PageSize";
+
     // 行为（使用计数开关）
     public const string RecordViews = "Behavior.RecordViews";
     public const string RecordCopies = "Behavior.RecordCopies";
@@ -24,4 +28,8 @@ public static class AppSettingsKeys
     public const string LaunchViewDefault = "Gallery";
     public const int ThumbMaxEdgeDefault = 480;
     public const int ThumbQualityDefault = 80;
+    public const string GalleryBrowseModeDefault = "Paged";
+    public const int GalleryPageSizeDefault = 21;
+    public const int GalleryPageSizeMin = 9;
+    public const int GalleryPageSizeMax = 140;
 }

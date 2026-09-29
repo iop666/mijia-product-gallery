@@ -26,6 +26,12 @@ public partial class SettingsViewModel : ObservableObject
     /// <summary>主题变更事件（App 层订阅并应用到根视觉树）。</summary>
     public event Action<string>? ThemeChanged;
 
+    /// <summary>每页显示数量变更事件（图库视图模型订阅并重新分页）。</summary>
+    public event Action<int>? PageSizeChanged;
+
+    /// <summary>浏览模式变更事件（图库视图模型订阅并重新加载）。</summary>
+    public event Action<string>? BrowseModeChanged;
+
     /// <summary>数据根目录（只读展示，由 App 注入）。</summary>
     public string DataRoot { get; set; } = string.Empty;
 
@@ -40,6 +46,14 @@ public partial class SettingsViewModel : ObservableObject
 
     [ObservableProperty]
     private int thumbQuality = AppSettingsKeys.ThumbQualityDefault;
+
+    /// <summary>浏览模式（Paged 分页默认 / Continuous 连续滚动）。</summary>
+    [ObservableProperty]
+    private string browseMode = AppSettingsKeys.GalleryBrowseModeDefault;
+
+    /// <summary>每页显示数量（9～140，默认 21）。</summary>
+    [ObservableProperty]
+    private int pageSize = AppSettingsKeys.GalleryPageSizeDefault;
 
     [ObservableProperty]
     private bool recordViews = true;
@@ -74,6 +88,26 @@ public partial class SettingsViewModel : ObservableObject
     {
         _ = settings.SetValueAsync(AppSettingsKeys.ThumbMaxEdge, value);
         _ = libraryOptions?.UpdateAsync(value, ThumbQuality);
+    }
+
+    partial void OnBrowseModeChanged(string value)
+    {
+        _ = settings.SetValueAsync(AppSettingsKeys.GalleryBrowseMode, value);
+        BrowseModeChanged?.Invoke(value);
+    }
+
+    partial void OnPageSizeChanged(int value)
+    {
+        var clamped = Math.Clamp(value, AppSettingsKeys.GalleryPageSizeMin, AppSettingsKeys.GalleryPageSizeMax);
+        if (clamped != value)
+        {
+            // 越界输入收敛到合法范围（只影响持久化与事件，界面由调用方刷新）。
+            PageSize = clamped;
+            return;
+        }
+
+        _ = settings.SetValueAsync(AppSettingsKeys.GalleryPageSize, value);
+        PageSizeChanged?.Invoke(value);
     }
 
     partial void OnThumbQualityChanged(int value)
@@ -118,6 +152,8 @@ public partial class SettingsViewModel : ObservableObject
         LaunchView = await settings.GetValueAsync(AppSettingsKeys.LaunchView, AppSettingsKeys.LaunchViewDefault, cancellationToken);
         ThumbMaxEdge = await settings.GetValueAsync(AppSettingsKeys.ThumbMaxEdge, AppSettingsKeys.ThumbMaxEdgeDefault, cancellationToken);
         ThumbQuality = await settings.GetValueAsync(AppSettingsKeys.ThumbQuality, AppSettingsKeys.ThumbQualityDefault, cancellationToken);
+        BrowseMode = await settings.GetValueAsync(AppSettingsKeys.GalleryBrowseMode, AppSettingsKeys.GalleryBrowseModeDefault, cancellationToken);
+        PageSize = await settings.GetValueAsync(AppSettingsKeys.GalleryPageSize, AppSettingsKeys.GalleryPageSizeDefault, cancellationToken);
         RecordViews = await settings.GetValueAsync(AppSettingsKeys.RecordViews, true, cancellationToken);
         RecordCopies = await settings.GetValueAsync(AppSettingsKeys.RecordCopies, true, cancellationToken);
         RecordDrags = await settings.GetValueAsync(AppSettingsKeys.RecordDrags, true, cancellationToken);

@@ -9,6 +9,8 @@
 
     <Page.KeyboardAccelerators>
         <KeyboardAccelerator Key="Escape" Invoked="OnEscapeInvoked" />
+        <KeyboardAccelerator Key="Left" Invoked="OnPageNavInvoked" />
+        <KeyboardAccelerator Key="Right" Invoked="OnPageNavInvoked" />
     </Page.KeyboardAccelerators>
 
     <Page.Resources>
@@ -30,6 +32,7 @@
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="*" />
+                <RowDefinition Height="Auto" />
             </Grid.RowDefinitions>
 
             <!-- 工具行：结果摘要 + 操作区（随机/排序/筛选/清除） -->
@@ -183,6 +186,42 @@
                         Content="退出随机"
                         Click="OnRandomExitClick" />
                 </Grid>
+            </Border>
+
+            <!-- 分页栏：固定内容区底部，不随卡片滚动；随机/连续滚动模式隐藏 -->
+            <Border
+                Grid.Row="4"
+                Background="{ThemeResource ControlFillColorSecondaryBrush}"
+                BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                BorderThickness="1"
+                CornerRadius="8"
+                Padding="10,6"
+                HorizontalAlignment="Center"
+                Visibility="{x:Bind Vm.IsPagerVisible, Mode=OneWay}">
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Spacing="6">
+                    <Button
+                        Content="首页"
+                        Click="OnFirstPageClick"
+                        IsEnabled="{x:Bind Vm.CanGoFirstPage, Mode=OneWay}" />
+                    <Button
+                        Content="上一页"
+                        Click="OnPrevPageClick"
+                        IsEnabled="{x:Bind Vm.CanGoPrevPage, Mode=OneWay}" />
+                    <TextBlock
+                        Text="{x:Bind Vm.PagerText, Mode=OneWay}"
+                        VerticalAlignment="Center"
+                        MinWidth="170"
+                        TextAlignment="Center"
+                        FontSize="13" />
+                    <Button
+                        Content="下一页"
+                        Click="OnNextPageClick"
+                        IsEnabled="{x:Bind Vm.CanGoNextPage, Mode=OneWay}" />
+                    <Button
+                        Content="末页"
+                        Click="OnLastPageClick"
+                        IsEnabled="{x:Bind Vm.CanGoLastPage, Mode=OneWay}" />
+                </StackPanel>
             </Border>
 
             <!-- 卡片网格 -->

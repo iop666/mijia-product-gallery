@@ -30,6 +30,16 @@ public sealed partial class GalleryPage : Page
         usage = App.Services.GetRequiredService<IUsageService>();
         Loaded += OnLoaded;
         CardsRepeater.ElementPrepared += OnElementPrepared;
+        vm.PropertyChanged += OnGalleryPropertyChanged;
+    }
+
+    /// <summary>翻页后滚动位置回到顶部。</summary>
+    private void OnGalleryPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(MijiaProductGallery.ViewModels.GalleryViewModel.CurrentPage))
+        {
+            DispatcherQueue.TryEnqueue(() => CardsScroll.ChangeView(null, 0, null, disableAnimation: false));
+        }
     }
 
     /// <summary>导航回图库时刷新数据（首次导入完成等场景）。</summary>
@@ -335,6 +345,60 @@ public sealed partial class GalleryPage : Page
         {
             combo.RequestedTheme = ThemeManager.ToElementTheme(ThemeManager.CurrentTheme);
         }
+    }
+
+    private void OnFirstPageClick(object sender, RoutedEventArgs e) => vm?.GoToFirstPage();
+
+    private void OnPrevPageClick(object sender, RoutedEventArgs e) => vm?.GoToPrevPage();
+
+    private void OnNextPageClick(object sender, RoutedEventArgs e) => vm?.GoToNextPage();
+
+    private void OnLastPageClick(object sender, RoutedEventArgs e) => vm?.GoToLastPage();
+
+    /// <summary>左右方向键翻页：焦点在文本输入或卡片网格内时交还原生行为。</summary>
+    private void OnPageNavInvoked(Microsoft.UI.Xaml.Input.KeyboardAccelerator sender,
+        Microsoft.UI.Xaml.Input.KeyboardAcceleratorInvokedEventArgs args)
+    {
+        var isLeft = sender.Key == Windows.System.VirtualKey.Left;
+        var isRight = sender.Key == Windows.System.VirtualKey.Right;
+        if (vm is null || !vm.IsPagedMode || vm.IsRandomMode)
+        {
+            return;
+        }
+
+        var focused = Microsoft.UI.Xaml.Input.FocusManager.GetFocusedElement(XamlRoot);
+        if (focused is TextBox or AutoSuggestBox
+            || IsDescendantOf(focused as Microsoft.UI.Xaml.DependencyObject, CardsScroll))
+        {
+            return;
+        }
+
+        if (isLeft && vm.CanGoPrevPage)
+        {
+            vm.GoToPrevPage();
+            args.Handled = true;
+        }
+        else if (isRight && vm.CanGoNextPage)
+        {
+            vm.GoToNextPage();
+            args.Handled = true;
+        }
+    }
+
+    /// <summary>判断元素是否位于指定祖先的子树内（卡片网格内的方向键交给原生焦点导航）。</summary>
+    private static bool IsDescendantOf(Microsoft.UI.Xaml.DependencyObject? element, Microsoft.UI.Xaml.DependencyObject ancestor)
+    {
+        while (element is not null)
+        {
+            if (element == ancestor)
+            {
+                return true;
+            }
+
+            element = Microsoft.UI.Xaml.Media.VisualTreeHelper.GetParent(element);
+        }
+
+        return false;
     }
 
     /// <summary>Esc：筛选面板打开时优先关闭面板，其余场景交给原生处理。</summary>
