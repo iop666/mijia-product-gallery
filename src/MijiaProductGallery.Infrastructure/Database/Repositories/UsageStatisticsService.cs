@@ -65,6 +65,33 @@ public sealed class UsageStatisticsService(
         };
     }
 
+    /// <summary>图库数据概览：全部来自 Products 真实数据；大类合计恒等于产品总数。</summary>
+    public async Task<GalleryOverview> GetGalleryOverviewAsync(CancellationToken cancellationToken = default)
+    {
+        await using var context = await contextFactory.CreateDbContextAsync(cancellationToken);
+
+        var totalCount = await context.Products.CountAsync(cancellationToken);
+        var withImageCount = await context.Products
+            .CountAsync(p => p.Sha256 != null && p.ImagePath != null, cancellationToken);
+        var removedCount = await context.Products
+            .CountAsync(p => !p.IsAvailable, cancellationToken);
+        var categories = await context.Products.AsNoTracking()
+            .GroupBy(p => p.Category)
+            .Select(g => new CategoryCount { Category = g.Key, Count = g.Count() })
+            .OrderByDescending(c => c.Count)
+            .ThenBy(c => c.Category)
+            .ToListAsync(cancellationToken);
+
+        return new GalleryOverview
+        {
+            TotalCount = totalCount,
+            WithImageCount = withImageCount,
+            WithoutImageCount = totalCount - withImageCount,
+            RemovedCount = removedCount,
+            Categories = categories,
+        };
+    }
+
     /// <summary>本地自然日起点的 Unix 秒。</summary>
     private static long StartOfDayUnix(DateTimeOffset local)
     {

@@ -195,8 +195,8 @@ public sealed class GalleryPagingViewModelTests : IAsyncLifetime
         await settings.SetValueAsync(AppSettingsKeys.GalleryBrowseMode, "Continuous");
         await vm!.LoadAsync();
         await WaitForAsync(() => vm.Cards.Count == 25);
-        // 连续模式不分页：TotalCount 不参与统计，分页栏隐藏。
-        Assert.Equal(0, vm.TotalCount);
+        // 连续模式不分页：分页栏隐藏；TotalCount 记录实际行数（驱动空状态/摘要）。
+        Assert.Equal(25, vm.TotalCount);
         Assert.False(vm.IsPagerVisible);
     }
 

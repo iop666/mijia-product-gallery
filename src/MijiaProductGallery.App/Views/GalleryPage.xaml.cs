@@ -1,4 +1,6 @@
 using Microsoft.Extensions.DependencyInjection;
+using Windows.Storage.Pickers;
+using WinRT.Interop;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
@@ -372,6 +374,187 @@ public sealed partial class GalleryPage : Page
             }
 
             error = createError;
+        }
+    }
+
+    /// <summary>导出收藏夹：命名方式 → 保存位置 → 流式 ZIP（进度可取消）。</summary>
+    private async void OnExportCollectionClick(object sender, RoutedEventArgs e)
+    {
+        if (vm is null || !vm.IsFavoritesMode)
+        {
+            return;
+        }
+
+        var items = await vm.GetExportItemsAsync();
+        if (items.Count == 0)
+        {
+            ShowNotice("当前收藏夹没有可导出的产品");
+            return;
+        }
+
+        var nameByModel = await ShowExportNamingDialogAsync();
+        if (nameByModel is null)
+        {
+            return;
+        }
+
+        var file = await PickExportTargetAsync();
+        if (file is null)
+        {
+            return;
+        }
+
+        var result = await RunExportAsync(items, file.Path, nameByModel.Value);
+        if (result.Cancelled)
+        {
+            ShowNotice("导出已取消");
+            return;
+        }
+
+        await ShowExportResultAsync(result);
+    }
+
+    /// <summary>命名方式选择：true=Model；false=设备名称；null=取消。</summary>
+    private async Task<bool?> ShowExportNamingDialogAsync()
+    {
+        var byModel = new RadioButton { Content = "使用产品 ID / Model（如 xiaomi.airp.mp5b.png）", Margin = new Microsoft.UI.Xaml.Thickness(0, 2, 0, 2) };
+        var byName = new RadioButton
+        {
+            Content = "使用设备名称（如 小米空气净化器.png）",
+            IsChecked = true,
+            Margin = new Microsoft.UI.Xaml.Thickness(0, 2, 0, 2),
+        };
+        var dialog = new ContentDialog
+        {
+            Title = "导出收藏夹",
+            XamlRoot = XamlRoot,
+            RequestedTheme = ThemeManager.ToElementTheme(ThemeManager.CurrentTheme),
+            Content = new StackPanel
+            {
+                Spacing = 8,
+                Children =
+                {
+                    new TextBlock { Text = "文件命名方式", FontWeight = Microsoft.UI.Text.FontWeights.SemiBold },
+                    byName,
+                    byModel,
+                },
+            },
+            PrimaryButtonText = "选择保存位置",
+            CloseButtonText = "取消",
+            DefaultButton = ContentDialogButton.Primary,
+        };
+        var choice = await dialog.ShowAsync();
+        if (choice != ContentDialogResult.Primary)
+        {
+            return null;
+        }
+
+        return byModel.IsChecked == true;
+    }
+
+    private async Task<Windows.Storage.StorageFile?> PickExportTargetAsync()
+    {
+        var picker = new Windows.Storage.Pickers.FileSavePicker
+        {
+            SuggestedFileName = $"收藏夹导出-{DateTime.Now:yyyyMMdd-HHmm}",
+        };
+        picker.FileTypeChoices.Add("ZIP 压缩包", new List<string> { ".zip" });
+        if (App.MainWindow is not null)
+        {
+            WinRT.Interop.InitializeWithWindow.Initialize(picker, WindowNative.GetWindowHandle(App.MainWindow));
+        }
+
+        return await picker.PickSaveFileAsync();
+    }
+
+    /// <summary>执行导出并驱动进度对话框；返回服务结果。</summary>
+    private async Task<CollectionExportResult> RunExportAsync(
+        IReadOnlyList<CollectionExportItem> items, string zipPath, bool nameByModel)
+    {
+        var progressBar = new Microsoft.UI.Xaml.Controls.ProgressBar
+        {
+            Minimum = 0,
+            Maximum = items.Count,
+            Width = 320,
+        };
+        var statusText = new TextBlock
+        {
+            Text = $"0 / {items.Count}",
+            HorizontalAlignment = HorizontalAlignment.Right,
+            FontSize = 12.5,
+            Foreground = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["TextFillColorSecondaryBrush"],
+        };
+        var dialog = new ContentDialog
+        {
+            Title = "正在导出收藏夹",
+            XamlRoot = XamlRoot,
+            RequestedTheme = ThemeManager.ToElementTheme(ThemeManager.CurrentTheme),
+            Content = new StackPanel { Spacing = 10, Children = { progressBar, statusText } },
+            CloseButtonText = "取消",
+        };
+
+        var cts = new CancellationTokenSource();
+        dialog.Closed += (_, _) => cts.Cancel();
+        _ = dialog.ShowAsync();
+
+        var progress = new Progress<CollectionExportProgress>(p =>
+        {
+            progressBar.Value = p.Completed;
+            statusText.Text = $"{p.Completed} / {p.Total}";
+        });
+
+        var service = App.Services.GetRequiredService<ICollectionExportService>();
+        var result = await service.ExportAsync(
+            new CollectionExportRequest { Items = items, ZipFilePath = zipPath, NameByModel = nameByModel },
+            progress,
+            cts.Token);
+        dialog.Hide();
+        return result;
+    }
+
+    /// <summary>导出结果提示；存在失败项时提供失败明细查看。</summary>
+    private async Task ShowExportResultAsync(CollectionExportResult result)
+    {
+        var summary = result.FailedItems.Count == 0
+            ? $"已导出 {result.ExportedCount} 张图片"
+            : $"已导出 {result.ExportedCount} 张，{result.FailedItems.Count} 张失败";
+        var dialog = new ContentDialog
+        {
+            Title = "导出完成",
+            XamlRoot = XamlRoot,
+            RequestedTheme = ThemeManager.ToElementTheme(ThemeManager.CurrentTheme),
+            Content = new TextBlock { Text = summary, TextWrapping = TextWrapping.Wrap, MaxWidth = 340 },
+            CloseButtonText = "完成",
+        };
+        if (result.FailedItems.Count > 0)
+        {
+            dialog.PrimaryButtonText = "查看失败列表";
+            var choice = await dialog.ShowAsync();
+            if (choice == ContentDialogResult.Primary)
+            {
+                var list = new TextBox
+                {
+                    Text = string.Join(Environment.NewLine, result.FailedItems),
+                    IsReadOnly = true,
+                    TextWrapping = TextWrapping.Wrap,
+                    MinWidth = 380,
+                    MinHeight = 200,
+                    AcceptsReturn = true,
+                };
+                var failedDialog = new ContentDialog
+                {
+                    Title = "导出失败明细",
+                    XamlRoot = XamlRoot,
+                    RequestedTheme = ThemeManager.ToElementTheme(ThemeManager.CurrentTheme),
+                    Content = new ScrollViewer { Content = list, MaxHeight = 380 },
+                    CloseButtonText = "关闭",
+                };
+                _ = await failedDialog.ShowAsync();
+            }
+        }
+        else
+        {
+            _ = await dialog.ShowAsync();
         }
     }
 

@@ -28,6 +28,15 @@ public partial class SettingsViewModel : ObservableObject
     /// <summary>浏览模式变更事件（图库视图模型订阅并重新加载）。</summary>
     public event Action<string>? BrowseModeChanged;
 
+    /// <summary>是否分页模式（决定"每页显示数量"设置是否可用）。</summary>
+    public bool IsPagedBrowseMode => BrowseMode != AppSettingsKeys.GalleryBrowseModeContinuous;
+
+    /// <summary>设置页"使用说明"分组内容。</summary>
+    public IReadOnlyList<HelpGroup> HelpGroups => HelpContent.Groups;
+
+    /// <summary>连续滚动模式提示文案。</summary>
+    public string PageSizeDisabledHint => "连续滚动模式下不可用";
+
     /// <summary>数据根目录（只读展示，由 App 注入）。</summary>
     public string DataRoot { get; set; } = string.Empty;
 
@@ -74,6 +83,7 @@ public partial class SettingsViewModel : ObservableObject
     partial void OnBrowseModeChanged(string value)
     {
         _ = settings.SetValueAsync(AppSettingsKeys.GalleryBrowseMode, value);
+        OnPropertyChanged(nameof(IsPagedBrowseMode));
         BrowseModeChanged?.Invoke(value);
     }
 

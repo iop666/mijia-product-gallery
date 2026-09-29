@@ -60,6 +60,12 @@
                         Click="OnManageCollectionsClick"
                         AutomationProperties.Name="管理收藏夹"
                         Visibility="{Binding IsFavoritesMode, Mode=OneWay, Converter={StaticResource BoolToVisibility}}" />
+                    <Button
+                        Content="导出收藏夹"
+                        Click="OnExportCollectionClick"
+                        AutomationProperties.Name="导出收藏夹"
+                        ToolTipService.ToolTip="将当前收藏夹中的产品图片打包导出为 ZIP"
+                        Visibility="{Binding IsFavoritesMode, Mode=OneWay, Converter={StaticResource BoolToVisibility}}" />
                     <TextBlock
                         Text="{Binding ResultSummary, Mode=OneWay}"
                         FontSize="13"

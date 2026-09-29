@@ -420,6 +420,24 @@ public partial class GalleryViewModel : ObservableObject
         }
     }
 
+    /// <summary>当前收藏夹的导出条目（默认收藏=星标全集；合集=该合集成员）。只读，不影响浏览状态。</summary>
+    public async Task<IReadOnlyList<CollectionExportItem>> GetExportItemsAsync(CancellationToken cancellationToken = default)
+    {
+        var query = SelectedCollection is { IsDefault: false } selected
+            ? new ProductQuery { CollectionId = selected.Id }
+            : new ProductQuery { Filter = new ProductFilter { IsFavorite = true } };
+        var rows = await queryService.QueryAsync(query, cancellationToken);
+        return rows
+            .Select(product => new CollectionExportItem
+            {
+                ProductId = product.Id,
+                Model = product.Model,
+                Name = product.Name,
+                ImagePath = product.ImagePath,
+            })
+            .ToList();
+    }
+
     /// <summary>设置当前合集；合集变化时回第 1 页重查（收藏视图内）。</summary>
     private void SelectCollectionCore(CollectionOption option)
     {
@@ -914,6 +932,9 @@ public partial class GalleryViewModel : ObservableObject
                 }
 
                 totalCount = rows.Count;
+                // 连续模式无页码语义，但总数仍驱动空状态/摘要；TotalPages 仅作占位。
+                TotalCount = totalCount;
+                TotalPages = Math.Max(1, totalCount);
             }
 
             if (generation != searchGeneration)

@@ -41,6 +41,61 @@
                 </Border>
             </Grid>
 
+            <TextBlock Text="图库概览" FontSize="16" FontWeight="SemiBold" Margin="0,8,0,0" />
+            <Grid ColumnSpacing="12">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <Border Style="{StaticResource StatCardStyle}">
+                    <StackPanel Spacing="4">
+                        <TextBlock Text="产品总数" FontSize="12.5" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                        <TextBlock Text="{Binding GalleryTotalCount, Mode=OneWay}" FontSize="24" FontWeight="SemiBold" />
+                    </StackPanel>
+                </Border>
+                <Border Grid.Column="1" Style="{StaticResource StatCardStyle}">
+                    <StackPanel Spacing="4">
+                        <TextBlock Text="有图片" FontSize="12.5" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                        <TextBlock Text="{Binding GalleryWithImageCount, Mode=OneWay}" FontSize="24" FontWeight="SemiBold" />
+                    </StackPanel>
+                </Border>
+                <Border Grid.Column="2" Style="{StaticResource StatCardStyle}">
+                    <StackPanel Spacing="4">
+                        <TextBlock Text="无图片" FontSize="12.5" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                        <TextBlock Text="{Binding GalleryWithoutImageCount, Mode=OneWay}" FontSize="24" FontWeight="SemiBold" />
+                    </StackPanel>
+                </Border>
+                <Border Grid.Column="3" Style="{StaticResource StatCardStyle}">
+                    <StackPanel Spacing="4">
+                        <TextBlock Text="官网已移除" FontSize="12.5" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                        <TextBlock Text="{Binding GalleryRemovedCount, Mode=OneWay}" FontSize="24" FontWeight="SemiBold" />
+                    </StackPanel>
+                </Border>
+            </Grid>
+
+            <TextBlock Text="各大类数量" FontSize="16" FontWeight="SemiBold" Margin="0,8,0,0" />
+            <Border Style="{StaticResource StatCardStyle}" Padding="14,8">
+                <ItemsControl ItemsSource="{Binding CategoryStats, Mode=OneWay}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <Grid ColumnSpacing="12" Padding="6,3">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="{Binding Category}" />
+                                <TextBlock
+                                    Grid.Column="1"
+                                    Text="{Binding Count}"
+                                    Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                            </Grid>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </Border>
+
             <TextBlock Text="最常使用" FontSize="16" FontWeight="SemiBold" Margin="0,8,0,0" />
             <ItemsControl ItemsSource="{Binding TopProducts, Mode=OneWay}">
                 <ItemsControl.ItemTemplate>

@@ -55,6 +55,7 @@ public sealed partial class SettingsPage : Page
             "Continuous" => 1,
             _ => 0,
         };
+        UpdatePageSizeAvailability();
         PageSizeBox.SelectedIndex = vm.PageSize switch
         {
             9 => 0,
@@ -79,6 +80,16 @@ public sealed partial class SettingsPage : Page
         suppressSelectionEvents = true;
         BackupFilesBox.ItemsSource = backups.Select(entry => entry.FileName).ToList();
         suppressSelectionEvents = false;
+    }
+
+    /// <summary>按浏览模式同步"每页显示数量"可用性（连续滚动模式下不参与任何查询逻辑）。</summary>
+    private void UpdatePageSizeAvailability()
+    {
+        var paged = vm.IsPagedBrowseMode;
+        PageSizeBox.IsEnabled = paged;
+        PageSizeHeader.Text = paged
+            ? "每页显示数量（9–140）"
+            : "每页显示数量（连续滚动模式下不可用）";
     }
 
     private void OnThemeSelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -109,6 +120,7 @@ public sealed partial class SettingsPage : Page
             "连续滚动" => "Continuous",
             _ => "Paged",
         };
+        UpdatePageSizeAvailability();
     }
 
     private void OnPageSizeSelectionChanged(object sender, SelectionChangedEventArgs e)

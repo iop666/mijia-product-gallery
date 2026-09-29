@@ -10,4 +10,7 @@ public interface IUsageStatisticsService
 {
     /// <summary>计算当前统计快照。</summary>
     Task<UsageStatistics> GetStatisticsAsync(int topCount = 5, CancellationToken cancellationToken = default);
+
+    /// <summary>图库数据概览：产品总数 / 有图 / 无图 / 官网已移除 / 各大类数量（全部来自 Products 真实数据）。</summary>
+    Task<GalleryOverview> GetGalleryOverviewAsync(CancellationToken cancellationToken = default);
 }

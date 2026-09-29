@@ -32,6 +32,7 @@ public static class AppSettingsKeys
     public const int ThumbMaxEdgeDefault = 480;
     public const int ThumbQualityDefault = 80;
     public const string GalleryBrowseModeDefault = "Paged";
+    public const string GalleryBrowseModeContinuous = "Continuous";
     public const int GalleryPageSizeDefault = 21;
     public const int GalleryPageSizeMin = 9;
     public const int GalleryPageSizeMax = 140;
