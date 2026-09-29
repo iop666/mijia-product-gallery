@@ -296,8 +296,7 @@ public sealed class PageBoxSubmitTests : IAsyncLifetime
     [Fact]
     public async Task Submit_MiddlePage_Jumps()
     {
-        vm!.PageBoxText = "3";
-        vm.SubmitPageBox();
+        vm!.SubmitPageText("3");
         await WaitForAsync(() => vm.CurrentPage == 3 && vm.Cards.Count == 5);
         Assert.Equal("3", vm.PageBoxText);
     }
@@ -305,19 +304,16 @@ public sealed class PageBoxSubmitTests : IAsyncLifetime
     [Fact]
     public async Task Submit_FirstPage_And_LastPage()
     {
-        vm!.PageBoxText = "1";
-        vm.SubmitPageBox();
+        vm!.SubmitPageText("1");
         await WaitForAsync(() => vm.CurrentPage == 1);
-        vm.PageBoxText = "3";
-        vm.SubmitPageBox();
+        vm.SubmitPageText("3");
         await WaitForAsync(() => vm.CurrentPage == 3);
     }
 
     [Fact]
     public async Task Submit_Zero_ClampsToFirstPage()
     {
-        vm!.PageBoxText = "0";
-        vm.SubmitPageBox();
+        vm!.SubmitPageText("0");
         await WaitForAsync(() => vm.CurrentPage == 1);
         Assert.Equal("1", vm.PageBoxText);
     }
@@ -325,8 +321,7 @@ public sealed class PageBoxSubmitTests : IAsyncLifetime
     [Fact]
     public async Task Submit_BeyondTotal_ClampsToLastPage()
     {
-        vm!.PageBoxText = "999";
-        vm.SubmitPageBox();
+        vm!.SubmitPageText("999");
         await WaitForAsync(() => vm.CurrentPage == 3);
         Assert.Equal("3", vm.PageBoxText);
     }
@@ -334,8 +329,7 @@ public sealed class PageBoxSubmitTests : IAsyncLifetime
     [Fact]
     public async Task Submit_Invalid_RevertsToCurrentPage_NoThrow()
     {
-        vm!.PageBoxText = "abc";
-        vm.SubmitPageBox();
+        vm!.SubmitPageText("abc");
         Assert.Equal("1", vm.PageBoxText);
         Assert.Equal(1, vm.CurrentPage);
         Assert.Equal(25, vm.TotalCount);
@@ -344,19 +338,30 @@ public sealed class PageBoxSubmitTests : IAsyncLifetime
     [Fact]
     public async Task FilterChange_UpdatesPageBoxToCorrectedPage()
     {
-        vm!.PageBoxText = "3";
-        vm.SubmitPageBox();
+        vm!.SubmitPageText("3");
         await WaitForAsync(() => vm.CurrentPage == 3);
         vm.FilterPane.SetCategorySelected("c", true);
         await WaitForAsync(() => vm.CurrentPage == 1 && vm.PageBoxText == "1");
     }
 
     [Fact]
+    public async Task Submit_Text_Enter_LoadsPage2_CardsChanged()
+    {
+        // "输入 2 + Enter → 第 2 页"：卡片数据确实变化（首卡为第 2 页首行）。
+        vm!.SubmitPageText("2");
+        await WaitForAsync(() => vm.CurrentPage == 2 && vm.Cards.Count == 10);
+        // PageBoxSubmitTests 种子前缀为 pb.model.*：第 2 页首行 010、末行 019。
+        Assert.Equal("pb.model.010", vm.Cards[0].Model);
+        Assert.Equal("pb.model.019", vm.Cards[9].Model);
+        // 页码显示与 CurrentPage 一致。
+        Assert.Equal("2", vm.PageBoxText);
+    }
+
+    [Fact]
     public async Task ScrollTop_Tracks_PageChanges_ViaCardsReset()
     {
         // 滚动置顶由页面订阅 CurrentPage 实现（ChangeView），此处验证翻页后卡片集合确实重置。
-        vm!.PageBoxText = "2";
-        vm.SubmitPageBox();
+        vm!.SubmitPageText("2");
         await WaitForAsync(() => vm.CurrentPage == 2 && vm.Cards.Count == 10);
         Assert.NotEqual("pg.model.000", vm.Cards[0].Model);
     }

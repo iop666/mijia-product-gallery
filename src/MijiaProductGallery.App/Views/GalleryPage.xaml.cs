@@ -347,13 +347,14 @@ public sealed partial class GalleryPage : Page
         }
     }
 
-    /// <summary>页码框 Enter：提交跳转并全选便于连续输入。</summary>
+    /// <summary>页码框 Enter：提交界面实际文本，走统一分页管线跳转并全选便于连续输入；
+    /// e.Handled 阻断冒泡，避免触发详情或其他快捷键。</summary>
     private void OnPageBoxKeyDown(object sender, Microsoft.UI.Xaml.Input.KeyRoutedEventArgs e)
     {
         if (e.Key == Windows.System.VirtualKey.Enter)
         {
             e.Handled = true;
-            vm?.SubmitPageBox();
+            vm?.SubmitPageText(PageBox.Text);
             PageBox.SelectAll();
         }
     }
@@ -361,7 +362,7 @@ public sealed partial class GalleryPage : Page
     /// <summary>页码框失焦：非法/越界输入校正回当前页。</summary>
     private void OnPageBoxLostFocus(object sender, RoutedEventArgs e)
     {
-        vm?.SubmitPageBox();
+        vm?.SubmitPageText(PageBox.Text);
     }
 
     private void OnFirstPageClick(object sender, RoutedEventArgs e) => vm?.GoToFirstPage();

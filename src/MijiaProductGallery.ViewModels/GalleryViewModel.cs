@@ -164,16 +164,21 @@ public partial class GalleryViewModel : ObservableObject
     [ObservableProperty]
     private string pageBoxText = "1";
 
-    /// <summary>提交页码输入：合法值钳制到 1～总页数后跳转；非法值校正回当前页。</summary>
-    public void SubmitPageBox()
+    /// <summary>
+    /// 提交页码输入（页码框 Enter/失焦调用，传入界面实际文本）：
+    /// 合法值经 GoToPage 钳制到 1～总页数并走统一分页管线（同页不重复查询）；
+    /// 非法值校正回当前页。
+    /// </summary>
+    public void SubmitPageText(string? raw)
     {
         if (!IsPagedMode)
         {
+            PageBoxText = CurrentPage.ToString();
             return;
         }
 
         if (int.TryParse(
-                PageBoxText?.Trim(),
+                raw?.Trim(),
                 System.Globalization.NumberStyles.Integer,
                 System.Globalization.CultureInfo.InvariantCulture,
                 out var page))
@@ -181,7 +186,7 @@ public partial class GalleryViewModel : ObservableObject
             GoToPage(page);
         }
 
-        // 合法跳转后同步为新页码；非法/越界校正回当前页。
+        // 跳转后同步为新页码；非法/越界/同页校正回当前页。
         PageBoxText = CurrentPage.ToString();
     }
 
@@ -543,6 +548,7 @@ public partial class GalleryViewModel : ObservableObject
         var target = Math.Clamp(page, 1, Math.Max(1, TotalPages));
         if (target == CurrentPage)
         {
+            PageBoxText = CurrentPage.ToString();
             return;
         }
 
