@@ -1,8 +1,10 @@
 using Microsoft.Extensions.DependencyInjection;
+using System.ComponentModel;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
 using MijiaProductGallery.App.Views;
+using MijiaProductGallery.Core;
 using MijiaProductGallery.Infrastructure.Database;
 using MijiaProductGallery.Core.Interfaces;
 using MijiaProductGallery.ViewModels;
@@ -16,6 +18,7 @@ namespace MijiaProductGallery.App;
 public sealed partial class MainWindow : Window
 {
     private GalleryViewModel? galleryViewModel;
+    private bool galleryWired;
     private InitializationViewModel? initializationViewModel;
     private StatisticsViewModel? statisticsViewModel;
     private GalleryPage? galleryPage;
@@ -30,8 +33,43 @@ public sealed partial class MainWindow : Window
     {
         InitializeComponent();
         Title = "米家产品示例图库";
-        ExtendsContentIntoTitleBar = true;
+        AppWindow.SetIcon(Path.Combine(AppContext.BaseDirectory, "app.ico"));
+        ApplyTitleBarTheme(App.InitialTheme);
+        if (App.InitialTheme == "Gray")
+        {
+            // 灰色模式：导航根部直接铺 Adobe 风格中灰，不依赖主题资源解析。
+            Nav.Background = new Microsoft.UI.Xaml.Media.SolidColorBrush(
+                Windows.UI.Color.FromArgb(255, 45, 45, 45));
+        }
+
+        App.Services.GetRequiredService<SettingsViewModel>().ThemeChanged += OnThemeChanged;
         Nav.Loaded += OnLoaded;
+    }
+
+    /// <summary>默认标题栏不跟随应用主题，深色系模式下显式设置标题栏与按钮颜色。</summary>
+    private void ApplyTitleBarTheme(string theme)
+    {
+        if (theme is not ("Dark" or "Gray"))
+        {
+            return;
+        }
+
+        var bar = AppWindow.TitleBar;
+        var background = theme == "Gray"
+            ? Windows.UI.Color.FromArgb(255, 45, 45, 45)
+            : Windows.UI.Color.FromArgb(255, 32, 32, 32);
+        var hover = theme == "Gray"
+            ? Windows.UI.Color.FromArgb(255, 58, 58, 58)
+            : Windows.UI.Color.FromArgb(255, 48, 48, 48);
+        bar.ForegroundColor = Windows.UI.Color.FromArgb(255, 240, 240, 240);
+        bar.BackgroundColor = background;
+        bar.ButtonForegroundColor = Windows.UI.Color.FromArgb(255, 240, 240, 240);
+        bar.ButtonBackgroundColor = background;
+        bar.ButtonHoverForegroundColor = Microsoft.UI.Colors.White;
+        bar.ButtonHoverBackgroundColor = hover;
+        bar.ButtonPressedBackgroundColor = background;
+        bar.ButtonInactiveBackgroundColor = background;
+        bar.ButtonInactiveForegroundColor = Windows.UI.Color.FromArgb(255, 160, 160, 160);
     }
 
     private async void OnLoaded(object sender, RoutedEventArgs e)
@@ -62,6 +100,22 @@ public sealed partial class MainWindow : Window
         args.Handled = true;
     }
 
+    /// <summary>搜索关键字在视图模型侧被清除（Chip 删除/清除全部）时同步输入框文本。</summary>
+    private void OnGalleryPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(GalleryViewModel.SearchText))
+        {
+            var text = galleryViewModel?.SearchText ?? string.Empty;
+            DispatcherQueue.TryEnqueue(() =>
+            {
+                if (SearchBox.Text != text)
+                {
+                    SearchBox.Text = text;
+                }
+            });
+        }
+    }
+
     private async Task RouteAsync()
     {
         // 启动顺序：先建库/迁移，再判断是否需要初始化。
@@ -80,9 +134,35 @@ public sealed partial class MainWindow : Window
         }
     }
 
+    /// <summary>主题为应用级资源，切换后以新主题重启应用（设置页已持久化新值）。
+    /// 与启动主题相同的变更（设置页加载时恢复持久化值）不重启。</summary>
+    private void OnThemeChanged(string theme)
+    {
+        if (theme == App.InitialTheme)
+        {
+            return;
+        }
+
+        DispatcherQueue.TryEnqueue(() =>
+        {
+            var exe = Environment.ProcessPath;
+            if (!string.IsNullOrEmpty(exe))
+            {
+                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(exe) { UseShellExecute = true });
+            }
+
+            Application.Current.Exit();
+        });
+    }
+
     private void ShowGallery(bool favorites = false, bool recent = false)
     {
         galleryViewModel ??= App.Services.GetRequiredService<GalleryViewModel>();
+        if (!galleryWired)
+        {
+            galleryWired = true;
+            galleryViewModel.PropertyChanged += OnGalleryPropertyChanged;
+        }
         if (recent)
         {
             galleryViewModel.EnterRecentMode();
@@ -144,8 +224,6 @@ public sealed partial class MainWindow : Window
                 ShowSyncCenter();
                 break;
         }
-
-        // 最近使用 / 同步中心 / 设置在后续阶段开放。
     }
 
     private void ShowStats()

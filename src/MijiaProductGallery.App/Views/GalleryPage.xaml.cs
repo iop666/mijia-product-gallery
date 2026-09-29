@@ -25,6 +25,7 @@ public sealed partial class GalleryPage : Page
     {
         InitializeComponent();
         vm = viewModel;
+        DataContext = viewModel;
         cardActions = App.Services.GetRequiredService<CardActionService>();
         usage = App.Services.GetRequiredService<IUsageService>();
         Loaded += OnLoaded;
@@ -56,18 +57,29 @@ public sealed partial class GalleryPage : Page
         {
             await vm.LoadAsync();
         }
+
+        SyncFilterCombos();
     }
 
     private void OnElementPrepared(ItemsRepeater sender, ItemsRepeaterElementPreparedEventArgs args)
     {
-        if (args.Element is not ContentPresenter { Content: ProductCardControl control }
+        // ElementPrepared 时 Content 未必已赋值，改在 Loaded（内容就绪）后再接线。
+        if (args.Element is ContentPresenter presenter)
+        {
+            presenter.Loaded += OnCardPresenterLoaded;
+        }
+    }
+
+    private void OnCardPresenterLoaded(object sender, RoutedEventArgs e)
+    {
+        if (sender is not ContentPresenter presenter
+            || presenter.Content is not ProductCardControl control
             || control.InteractionWired)
         {
             return;
         }
 
         control.InteractionWired = true;
-        control.PathResolver = card => App.Services.GetRequiredService<IImageStore>().ResolveAbsolutePath(card.ImagePath);
         control.DetailRequested += OnCardDetailRequested;
         control.DragCompleted += OnCardDragCompleted;
         control.FavoriteRequested += OnCardFavoriteRequested;
@@ -163,10 +175,6 @@ public sealed partial class GalleryPage : Page
         await vm.LoadAsync();
     }
 
-    private void OnSortMenuClick(object sender, RoutedEventArgs e)
-    {
-    }
-
     private void OnSortItemClick(object sender, RoutedEventArgs e)
     {
         if (vm is null || sender is not MenuFlyoutItem { Tag: string tag })
@@ -211,12 +219,63 @@ public sealed partial class GalleryPage : Page
             return;
         }
 
+        SyncFilterCombos();
         vm.FilterPane.IsOpen = !vm.FilterPane.IsOpen;
     }
 
     private void OnClearFiltersClick(object sender, RoutedEventArgs e)
     {
-        vm?.ClearAllFilters();
+        if (vm is null)
+        {
+            return;
+        }
+
+        vm.ClearAllFilters();
+        suppressComboEvents = true;
+        AvailabilityCombo.SelectedIndex = 0;
+        ImageCombo.SelectedIndex = 0;
+        UsageCombo.SelectedIndex = 0;
+        DateCombo.SelectedIndex = 0;
+        suppressComboEvents = false;
+    }
+
+    /// <summary>把筛选面板四个下拉的显示状态同步为视图模型当前值（防抖期间不回写）。</summary>
+    private bool suppressComboEvents;
+
+    private void SyncFilterCombos()
+    {
+        if (vm is null)
+        {
+            return;
+        }
+
+        suppressComboEvents = true;
+        AvailabilityCombo.SelectedIndex = vm.FilterPane.Availability switch
+        {
+            AvailabilityOption.AvailableOnly => 1,
+            AvailabilityOption.DelistedOnly => 2,
+            _ => 0,
+        };
+        ImageCombo.SelectedIndex = vm.FilterPane.ImageOptionValue switch
+        {
+            ImageOption.WithImage => 1,
+            ImageOption.WithoutImage => 2,
+            _ => 0,
+        };
+        UsageCombo.SelectedIndex = vm.FilterPane.Usage switch
+        {
+            UsageRange.NeverUsed => 1,
+            UsageRange.Used => 2,
+            UsageRange.HighUsage => 3,
+            _ => 0,
+        };
+        DateCombo.SelectedIndex = vm.FilterPane.UpdateRange switch
+        {
+            DateRange.Last7Days => 1,
+            DateRange.Last30Days => 2,
+            _ => 0,
+        };
+        suppressComboEvents = false;
     }
 
     private void OnChipRemoveClick(object sender, RoutedEventArgs e)
@@ -227,9 +286,19 @@ public sealed partial class GalleryPage : Page
         }
     }
 
-    private void OnAvailabilitySelectionChanged(object sender, SelectionChangedEventArgs e)
+    private void OnBrandSearchTextChanged(object sender, TextChangedEventArgs e)
     {
         if (vm is null)
+        {
+            return;
+        }
+
+        vm.FilterPane.BrandSearchText = BrandSearchBox.Text;
+    }
+
+    private void OnAvailabilitySelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (vm is null || suppressComboEvents)
         {
             return;
         }
@@ -244,7 +313,7 @@ public sealed partial class GalleryPage : Page
 
     private void OnImageSelectionChanged(object sender, SelectionChangedEventArgs e)
     {
-        if (vm is null)
+        if (vm is null || suppressComboEvents)
         {
             return;
         }
@@ -259,7 +328,7 @@ public sealed partial class GalleryPage : Page
 
     private void OnUsageSelectionChanged(object sender, SelectionChangedEventArgs e)
     {
-        if (vm is null)
+        if (vm is null || suppressComboEvents)
         {
             return;
         }
@@ -275,7 +344,7 @@ public sealed partial class GalleryPage : Page
 
     private void OnDateSelectionChanged(object sender, SelectionChangedEventArgs e)
     {
-        if (vm is null)
+        if (vm is null || suppressComboEvents)
         {
             return;
         }

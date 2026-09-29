@@ -11,6 +11,8 @@
             <converters:BoolToVisibilityConverter x:Key="BoolToVisibility" />
             <converters:PathToImageConverter x:Key="PathToImage" />
             <converters:InverseBoolToVisibilityConverter x:Key="InverseBool" />
+            <converters:InverseBoolConverter x:Key="InverseBoolValue" />
+            <converters:NullToCollapsedConverter x:Key="NullToCollapsed" />
             <Style x:Key="StatCardStyle" TargetType="Border">
                 <Setter Property="CornerRadius" Value="8" />
                 <Setter Property="Padding" Value="14,10" />

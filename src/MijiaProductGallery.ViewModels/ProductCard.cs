@@ -54,6 +54,9 @@ public partial class ProductCard : ObservableObject
     /// <summary>相对路径（供"打开文件位置"等后续功能使用）。</summary>
     public string? ImagePath { get; }
 
+    /// <summary>品牌与分类的复合展示行（"品牌 · 大类"）。</summary>
+    public string BrandCategory => $"{Brand} · {Category}";
+
     /// <summary>是否有可加载的图片。</summary>
     public bool HasImage { get; }
 

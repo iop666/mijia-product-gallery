@@ -66,6 +66,29 @@ public partial class FilterPaneViewModel : ObservableObject
 
     public ObservableCollection<FilterOption> Brands { get; } = [];
 
+    /// <summary>品牌搜索过滤后的可见列表（品牌总数 1400+，搜索便于定位）。</summary>
+    public ObservableCollection<FilterOption> FilteredBrands { get; } = [];
+
+    [ObservableProperty]
+    private string? brandSearchText;
+
+    partial void OnBrandSearchTextChanged(string? value) => ApplyBrandFilter();
+
+    /// <summary>按搜索词过滤品牌可见列表（大小写不敏感的包含匹配，空词显示全部）。</summary>
+    public void ApplyBrandFilter()
+    {
+        var query = BrandSearchText?.Trim();
+        FilteredBrands.Clear();
+        foreach (var brand in Brands)
+        {
+            if (string.IsNullOrEmpty(query)
+                || brand.Label.Contains(query, StringComparison.OrdinalIgnoreCase))
+            {
+                FilteredBrands.Add(brand);
+            }
+        }
+    }
+
     [ObservableProperty]
     private AvailabilityOption availability = AvailabilityOption.All;
 
@@ -106,6 +129,7 @@ public partial class FilterPaneViewModel : ObservableObject
         suppressEvents = true;
         FillOptions(Categories, categories, savedCategories);
         FillOptions(Brands, brands, savedBrands);
+        ApplyBrandFilter();
         Availability = saved?.Availability is true
             ? AvailabilityOption.AvailableOnly
             : saved?.Availability is false ? AvailabilityOption.DelistedOnly : AvailabilityOption.All;

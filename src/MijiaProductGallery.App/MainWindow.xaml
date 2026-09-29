@@ -48,7 +48,7 @@
                     <SymbolIcon Symbol="Sync" />
                 </NavigationViewItem.Icon>
             </NavigationViewItem>
-            <NavigationViewItem Content="设置" Tag="settings" IsEnabled="False">
+            <NavigationViewItem Content="设置" Tag="settings">
                 <NavigationViewItem.Icon>
                     <SymbolIcon Symbol="Setting" />
                 </NavigationViewItem.Icon>

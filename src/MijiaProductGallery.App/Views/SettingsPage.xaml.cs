@@ -26,11 +26,14 @@ public sealed partial class SettingsPage : Page
 
     private async void OnLoaded(object sender, RoutedEventArgs e)
     {
+        // 先加载持久化设置，再回填各控件显示，保证下拉框反映真实持久化值。
+        await vm.LoadAsync();
         suppressSelectionEvents = true;
         ThemeBox.SelectedIndex = vm.Theme switch
         {
             "Light" => 1,
             "Dark" => 2,
+            "Gray" => 3,
             _ => 0,
         };
         LaunchViewBox.SelectedIndex = vm.LaunchView switch
@@ -48,7 +51,6 @@ public sealed partial class SettingsPage : Page
             _ => 3,
         };
         suppressSelectionEvents = false;
-        await vm.LoadAsync();
         await RefreshBackupListAsync();
     }
 
@@ -71,6 +73,7 @@ public sealed partial class SettingsPage : Page
         {
             "浅色" => "Light",
             "深色" => "Dark",
+            "灰色" => "Gray",
             _ => "System",
         };
     }

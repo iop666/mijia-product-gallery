@@ -4,29 +4,26 @@
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
 
-    <Grid x:Name="RootGrid">
+    <Grid x:Name="RootGrid" CanDrag="True">
         <VisualStateManager.VisualStateGroups>
             <VisualStateGroup x:Name="CommonStates">
                 <VisualState x:Name="Normal" />
                 <VisualState x:Name="PointerOver">
                     <VisualState.Setters>
                         <Setter Target="CardBorder.Background" Value="{ThemeResource CardBackgroundFillColorSecondaryBrush}" />
-                        <Setter Target="CardBorder.BorderBrush" Value="{ThemeResource AccentFillColorDefaultBrush}" />
-                        <Setter Target="CardBorder.Translation" Value="0,-2,0" />
+                        <Setter Target="CardBorder.BorderBrush" Value="{ThemeResource ControlStrokeColorSecondaryBrush}" />
                         <Setter Target="HoverCopyButton.Visibility" Value="Visible" />
                     </VisualState.Setters>
                 </VisualState>
                 <VisualState x:Name="Pressed">
                     <VisualState.Setters>
                         <Setter Target="CardBorder.Background" Value="{ThemeResource CardBackgroundFillColorTertiaryBrush}" />
-                        <Setter Target="CardBorder.Translation" Value="0,0,0" />
                         <Setter Target="HoverCopyButton.Visibility" Value="Collapsed" />
                     </VisualState.Setters>
                 </VisualState>
                 <VisualState x:Name="DragCue">
                     <VisualState.Setters>
                         <Setter Target="CardBorder.BorderBrush" Value="{ThemeResource AccentFillColorDefaultBrush}" />
-                        <Setter Target="CardBorder.Translation" Value="0,-3,0" />
                     </VisualState.Setters>
                 </VisualState>
             </VisualStateGroup>
@@ -37,15 +34,15 @@
             CornerRadius="8"
             Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
             BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
-            BorderThickness="1"
-            Padding="8">
-            <Grid RowSpacing="6">
+            BorderThickness="1">
+            <Grid>
                 <Grid.RowDefinitions>
                     <RowDefinition Height="*" />
                     <RowDefinition Height="Auto" />
                 </Grid.RowDefinitions>
 
-                <Grid>
+                <!-- 统一图片区域 -->
+                <Grid Grid.Row="0" Margin="10,10,10,0">
                     <Image
                         x:Name="CardImage"
                         Source="{Binding ThumbnailPath, Mode=OneWay, Converter={StaticResource PathToImage}}"
@@ -54,25 +51,24 @@
                     <ProgressRing
                         IsActive="{Binding ShowLoading, Mode=OneWay}"
                         Visibility="{Binding ShowLoading, Mode=OneWay, Converter={StaticResource BoolToVisibility}}"
-                        Width="28"
-                        Height="28" />
+                        Width="24"
+                        Height="24" />
                     <StackPanel
                         HorizontalAlignment="Center"
                         VerticalAlignment="Center"
                         Spacing="4"
                         Visibility="{Binding ShowFailed, Mode=OneWay, Converter={StaticResource BoolToVisibility}}">
-                        <FontIcon Glyph="&#xE7BA;" FontSize="22" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                        <FontIcon Glyph="&#xE7BA;" FontSize="20" Foreground="{ThemeResource TextFillColorSecondaryBrush}" HorizontalAlignment="Center" />
                         <TextBlock
                             Text="{Binding FailureText, Mode=OneWay}"
                             FontSize="11"
-                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                            Foreground="{ThemeResource TextFillColorTertiaryBrush}"
                             HorizontalAlignment="Center" />
                     </StackPanel>
-                    <TextBlock
+                    <FontIcon
                         x:Name="FavoriteBadge"
-                        Text="&#xE735;"
-                        FontFamily="{ThemeResource SymbolThemeFontFamily}"
-                        FontSize="15"
+                        Glyph="&#xE735;"
+                        FontSize="14"
                         Foreground="{ThemeResource AccentFillColorDefaultBrush}"
                         HorizontalAlignment="Left"
                         VerticalAlignment="Top"
@@ -89,40 +85,50 @@
                         Click="OnHoverCopyClick" />
                 </Grid>
 
-                <StackPanel Grid.Row="1" Spacing="2">
+                <!-- 文本区：名称 → 型号 → 品牌·分类 -->
+                <StackPanel Grid.Row="1" Margin="10,8,10,10" Spacing="2">
                     <TextBlock
                         Text="{Binding Name}"
-                        FontSize="12.5"
+                        FontSize="13"
+                        FontWeight="SemiBold"
                         TextWrapping="Wrap"
                         MaxLines="2"
                         TextTrimming="CharacterEllipsis"
                         ToolTipService.ToolTip="{Binding Name}" />
                     <TextBlock
-                        Text="{Binding Brand}"
+                        Text="{Binding Model}"
                         FontSize="11"
+                        TextTrimming="CharacterEllipsis"
                         Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                        TextTrimming="CharacterEllipsis" />
+                        ToolTipService.ToolTip="{Binding Model}" />
                     <TextBlock
-                        Text="{Binding Category}"
+                        Text="{Binding BrandCategory}"
                         FontSize="11"
+                        TextTrimming="CharacterEllipsis"
+                        Foreground="{ThemeResource TextFillColorTertiaryBrush}" />
+                    <TextBlock
+                        Text="{Binding RecentInfo, Mode=OneWay}"
+                        FontSize="11"
+                        TextTrimming="CharacterEllipsis"
                         Foreground="{ThemeResource TextFillColorTertiaryBrush}"
-                        TextTrimming="CharacterEllipsis" />
+                        Visibility="{Binding RecentInfo, Mode=OneWay, Converter={StaticResource NullToCollapsed}}" />
                 </StackPanel>
             </Grid>
 
             <Border.ContextFlyout>
                 <MenuFlyout>
-                    <MenuFlyoutItem x:Name="MenuCopyImage" Text="复制图片" Click="OnMenuCopyImageClick">
-                        <MenuFlyoutItem.Icon>
-                            <FontIcon Glyph="&#xE8C8;" />
-                        </MenuFlyoutItem.Icon>
-                    </MenuFlyoutItem>
-                    <MenuFlyoutSeparator />
-                    <MenuFlyoutItem Text="复制产品名称" Click="OnMenuCopyNameClick" />
-                    <MenuFlyoutItem Text="复制型号" Click="OnMenuCopyModelClick" />
-                    <MenuFlyoutItem Text="复制品牌" Click="OnMenuCopyBrandClick" />
-                    <MenuFlyoutItem Text="复制完整信息" Click="OnMenuCopyFullInfoClick" />
-                    <MenuFlyoutSeparator />
+                    <MenuFlyoutSubItem Text="复制">
+                        <MenuFlyoutItem x:Name="MenuCopyImage" Text="复制图片" Click="OnMenuCopyImageClick">
+                            <MenuFlyoutItem.Icon>
+                                <FontIcon Glyph="&#xE8C8;" />
+                            </MenuFlyoutItem.Icon>
+                        </MenuFlyoutItem>
+                        <MenuFlyoutSeparator />
+                        <MenuFlyoutItem Text="复制产品名称" Click="OnMenuCopyNameClick" />
+                        <MenuFlyoutItem Text="复制型号" Click="OnMenuCopyModelClick" />
+                        <MenuFlyoutItem Text="复制品牌" Click="OnMenuCopyBrandClick" />
+                        <MenuFlyoutItem Text="复制完整信息" Click="OnMenuCopyFullInfoClick" />
+                    </MenuFlyoutSubItem>
                     <MenuFlyoutItem x:Name="MenuFavorite" Click="OnMenuFavoriteClick">
                         <MenuFlyoutItem.Icon>
                             <FontIcon Glyph="&#xE734;" />

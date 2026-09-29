@@ -116,7 +116,11 @@ public partial class GalleryViewModel : ObservableObject
 
     /// <summary>结果摘要（如"空气 · 找到 32 个产品"），全量时为"共 N 个产品"。</summary>
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasResultSummary))]
     private string? resultSummary;
+
+    /// <summary>是否有可展示的结果摘要。</summary>
+    public bool HasResultSummary => ResultSummary is not null;
 
     [ObservableProperty]
     private string? searchText;
