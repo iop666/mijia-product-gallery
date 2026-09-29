@@ -43,6 +43,7 @@ public sealed partial class MainWindow : Window
         App.Services.GetRequiredService<SettingsViewModel>().ThemeChanged += OnThemeChanged;
         Nav.Loaded += OnLoaded;
         Nav.SizeChanged += OnNavSizeChanged;
+        Nav.KeyDown += OnNavKeyDown;
     }
 
     /// <summary>导航根部铺不透明的主题底色：窗口级背景资源跟随启动主题，
@@ -119,10 +120,16 @@ public sealed partial class MainWindow : Window
         vm.ApplySearchImmediate(args.QueryText ?? string.Empty);
     }
 
-    private void OnCtrlFInvoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
+    /// <summary>Ctrl+F 聚焦搜索框（KeyDown 路由，避免加速器悬停提示）。</summary>
+    private void OnNavKeyDown(object sender, Microsoft.UI.Xaml.Input.KeyRoutedEventArgs e)
     {
-        SearchBox.Focus(FocusState.Keyboard);
-        args.Handled = true;
+        var ctrlDown = Microsoft.UI.Input.InputKeyboardSource.GetKeyStateForCurrentThread(
+            Windows.System.VirtualKey.Control).HasFlag(Windows.UI.Core.CoreVirtualKeyStates.Down);
+        if (ctrlDown && e.Key == Windows.System.VirtualKey.F)
+        {
+            SearchBox.Focus(FocusState.Keyboard);
+            e.Handled = true;
+        }
     }
 
     /// <summary>搜索关键字在视图模型侧被清除（Chip 删除/清除全部）时同步输入框文本。</summary>

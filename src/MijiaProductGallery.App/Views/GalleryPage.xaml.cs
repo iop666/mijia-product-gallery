@@ -1,6 +1,7 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Input;
 using MijiaProductGallery.Core.Enums;
 using MijiaProductGallery.Core.Query;
 using MijiaProductGallery.App.Controls;
@@ -388,64 +389,59 @@ public sealed partial class GalleryPage : Page
     private void OnLastPageClick(object sender, RoutedEventArgs e) => vm?.GoToLastPage();
 
     /// <summary>
-    /// 分页键盘（仅分页模式）：
-    /// 左/右——上一页/下一页（文本输入与卡片网格内交还原生焦点导航）；
-    /// PageUp/PageDown——上一页/下一页（文本输入时交还编辑）；
-    /// Home/End——第一页/最后一页（文本输入时交还编辑）；
+    /// 分页键盘（KeyDown 路由，无加速器悬停提示）：
+    /// Esc——关闭筛选面板；←/→/PageUp/PageDown——上一页/下一页；
+    /// Home/End——第一页/最后一页。文本框内按键交还原生编辑。
     /// 无上/下页时不产生动作，也不重复查询。
     /// </summary>
-    private void OnPageNavInvoked(Microsoft.UI.Xaml.Input.KeyboardAccelerator sender,
-        Microsoft.UI.Xaml.Input.KeyboardAcceleratorInvokedEventArgs args)
+    protected override void OnKeyDown(KeyRoutedEventArgs e)
     {
-        if (vm is null || !vm.IsPagedMode || vm.IsRandomMode)
+        if (vm is not null)
         {
-            return;
-        }
-
-        var focused = Microsoft.UI.Xaml.Input.FocusManager.GetFocusedElement(XamlRoot);
-        if (focused is TextBox or AutoSuggestBox)
-        {
-            // 文本编辑（搜索/品牌/页码框）：全部按键交还原生编辑行为。
-            return;
-        }
-
-        var inCards = IsDescendantOf(focused as Microsoft.UI.Xaml.DependencyObject, CardsScroll);
-        var goPrev = false;
-        var goNext = false;
-        switch (sender.Key)
-        {
-            case Windows.System.VirtualKey.Left when !inCards && vm.CanGoPrevPage:
-                goPrev = true;
-                break;
-            case Windows.System.VirtualKey.Right when !inCards && vm.CanGoNextPage:
-                goNext = true;
-                break;
-            case Windows.System.VirtualKey.PageUp when vm.CanGoPrevPage:
-                goPrev = true;
-                break;
-            case Windows.System.VirtualKey.PageDown when vm.CanGoNextPage:
-                goNext = true;
-                break;
-            case Windows.System.VirtualKey.Home when vm.CanGoFirstPage:
-                vm.GoToFirstPage();
-                args.Handled = true;
+            if (e.Key == Windows.System.VirtualKey.Escape && vm.FilterPane.IsOpen)
+            {
+                vm.FilterPane.IsOpen = false;
+                e.Handled = true;
                 return;
-            case Windows.System.VirtualKey.End when vm.CanGoLastPage:
-                vm.GoToLastPage();
-                args.Handled = true;
-                return;
+            }
+
+            if (vm.IsPagedMode && !vm.IsRandomMode)
+            {
+                var focused = Microsoft.UI.Xaml.Input.FocusManager.GetFocusedElement(XamlRoot);
+                if (focused is not TextBox and not AutoSuggestBox)
+                {
+                    var handled = true;
+                    switch (e.Key)
+                    {
+                        case Windows.System.VirtualKey.Left when vm.CanGoPrevPage:
+                        case Windows.System.VirtualKey.PageUp when vm.CanGoPrevPage:
+                            vm.GoToPrevPage();
+                            break;
+                        case Windows.System.VirtualKey.Right when vm.CanGoNextPage:
+                        case Windows.System.VirtualKey.PageDown when vm.CanGoNextPage:
+                            vm.GoToNextPage();
+                            break;
+                        case Windows.System.VirtualKey.Home when vm.CanGoFirstPage:
+                            vm.GoToFirstPage();
+                            break;
+                        case Windows.System.VirtualKey.End when vm.CanGoLastPage:
+                            vm.GoToLastPage();
+                            break;
+                        default:
+                            handled = false;
+                            break;
+                    }
+
+                    if (handled)
+                    {
+                        e.Handled = true;
+                        return;
+                    }
+                }
+            }
         }
 
-        if (goPrev)
-        {
-            vm.GoToPrevPage();
-            args.Handled = true;
-        }
-        else if (goNext)
-        {
-            vm.GoToNextPage();
-            args.Handled = true;
-        }
+        base.OnKeyDown(e);
     }
 
     /// <summary>判断元素是否位于指定祖先的子树内（卡片网格内的方向键交给原生焦点导航）。</summary>

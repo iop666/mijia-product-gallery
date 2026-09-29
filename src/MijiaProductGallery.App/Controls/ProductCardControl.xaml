@@ -124,10 +124,26 @@
                             </MenuFlyoutItem.Icon>
                         </MenuFlyoutItem>
                         <MenuFlyoutSeparator />
-                        <MenuFlyoutItem Text="复制产品名称" Click="OnMenuCopyNameClick" />
-                        <MenuFlyoutItem Text="复制型号" Click="OnMenuCopyModelClick" />
-                        <MenuFlyoutItem Text="复制品牌" Click="OnMenuCopyBrandClick" />
-                        <MenuFlyoutItem Text="复制完整信息" Click="OnMenuCopyFullInfoClick" />
+                        <MenuFlyoutItem Text="复制产品名称" Click="OnMenuCopyNameClick">
+                            <MenuFlyoutItem.Icon>
+                                <FontIcon Glyph="&#xE8C8;" />
+                            </MenuFlyoutItem.Icon>
+                        </MenuFlyoutItem>
+                        <MenuFlyoutItem Text="复制型号" Click="OnMenuCopyModelClick">
+                            <MenuFlyoutItem.Icon>
+                                <FontIcon Glyph="&#xE8C8;" />
+                            </MenuFlyoutItem.Icon>
+                        </MenuFlyoutItem>
+                        <MenuFlyoutItem Text="复制品牌" Click="OnMenuCopyBrandClick">
+                            <MenuFlyoutItem.Icon>
+                                <FontIcon Glyph="&#xE8C8;" />
+                            </MenuFlyoutItem.Icon>
+                        </MenuFlyoutItem>
+                        <MenuFlyoutItem Text="复制完整信息" Click="OnMenuCopyFullInfoClick">
+                            <MenuFlyoutItem.Icon>
+                                <FontIcon Glyph="&#xE8C8;" />
+                            </MenuFlyoutItem.Icon>
+                        </MenuFlyoutItem>
                     </MenuFlyoutSubItem>
                     <MenuFlyoutItem x:Name="MenuFavorite" Click="OnMenuFavoriteClick">
                         <MenuFlyoutItem.Icon>

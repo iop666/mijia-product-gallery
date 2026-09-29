@@ -39,9 +39,6 @@
                     TextChanged="OnSearchTextChanged"
                     QuerySubmitted="OnSearchQuerySubmitted" />
             </NavigationView.AutoSuggestBox>
-            <NavigationView.KeyboardAccelerators>
-                <KeyboardAccelerator Modifiers="Control" Key="F" Invoked="OnCtrlFInvoked" />
-            </NavigationView.KeyboardAccelerators>
             <NavigationView.MenuItems>
                 <NavigationViewItem Content="图库" Tag="gallery" IsSelected="True">
                     <NavigationViewItem.Icon>

@@ -137,7 +137,8 @@ public sealed partial class ProductCardControl : UserControl
     {
         var hasImage = Card?.HasImage ?? false;
         MenuCopyImage.IsEnabled = hasImage;
-        MenuFavorite.Text = Card?.IsFavorite == true ? "★ 取消收藏" : "☆ 加入收藏";
+        // 星形图标已在 XAML 中固定，文字不带星号前缀（避免与图标重复）。
+        MenuFavorite.Text = Card?.IsFavorite == true ? "取消收藏" : "加入收藏";
     }
 
     private void OnPointerPressed(object sender, PointerRoutedEventArgs e)

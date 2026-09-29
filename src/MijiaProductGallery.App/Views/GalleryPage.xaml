@@ -7,15 +7,6 @@
     xmlns:local="using:MijiaProductGallery.App.Converters"
     xmlns:vm="using:MijiaProductGallery.ViewModels">
 
-    <Page.KeyboardAccelerators>
-        <KeyboardAccelerator Key="Escape" Invoked="OnEscapeInvoked" />
-        <KeyboardAccelerator Key="Left" Invoked="OnPageNavInvoked" />
-        <KeyboardAccelerator Key="Right" Invoked="OnPageNavInvoked" />
-        <KeyboardAccelerator Key="PageUp" Invoked="OnPageNavInvoked" />
-        <KeyboardAccelerator Key="PageDown" Invoked="OnPageNavInvoked" />
-        <KeyboardAccelerator Key="Home" Invoked="OnPageNavInvoked" />
-        <KeyboardAccelerator Key="End" Invoked="OnPageNavInvoked" />
-    </Page.KeyboardAccelerators>
 
     <Page.Resources>
         <DataTemplate x:Key="ProductCardTemplate" x:DataType="vm:ProductCard">
