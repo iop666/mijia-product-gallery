@@ -34,6 +34,10 @@ public sealed partial class MainWindow : Window
         InitializeComponent();
         Title = "米家产品示例图库";
         AppWindow.SetIcon(Path.Combine(AppContext.BaseDirectory, "app.ico"));
+        // 内容延伸进标题栏：客户区全部由应用底色铺满，接缝不透窗口底色；
+        // 拖拽区为顶部标题条，右上系统按钮浮于其上。
+        ExtendsContentIntoTitleBar = true;
+        SetTitleBar(TitleBarDragArea);
         ApplyTitleBarTheme(App.InitialTheme);
         ApplyRootBackground(App.InitialTheme);
         App.Services.GetRequiredService<SettingsViewModel>().ThemeChanged += OnThemeChanged;
@@ -51,7 +55,7 @@ public sealed partial class MainWindow : Window
             "Gray" => 0xFF3B3B3B,
             _ => 0xFFFFFFFF,
         };
-        Nav.Background = new Microsoft.UI.Xaml.Media.SolidColorBrush(Windows.UI.Color.FromArgb(
+        WindowGrid.Background = new Microsoft.UI.Xaml.Media.SolidColorBrush(Windows.UI.Color.FromArgb(
             (byte)(argb >> 24), (byte)(argb >> 16), (byte)(argb >> 8), (byte)argb));
     }
 
@@ -73,53 +77,24 @@ public sealed partial class MainWindow : Window
         }
     }
 
-    /// <summary>默认标题栏不跟随应用主题，三种主题模式显式设置标题栏与按钮颜色。</summary>
+    /// <summary>内容延伸进标题栏后，系统按钮浮于应用底色上：仅设置前景与悬停色，
+    /// 按钮底透明；标题文字/图标由拖拽条元素承载。</summary>
     private void ApplyTitleBarTheme(string theme)
     {
         var bar = AppWindow.TitleBar;
-        if (theme == "Dark")
-        {
-            ApplyTitleBarColors(bar, 0xFF202020, 0xFF303030);
-        }
-        else if (theme == "Gray")
-        {
-            ApplyTitleBarColors(bar, 0xFF3B3B3B, 0xFF4A4A4A);
-        }
-        else
-        {
-            ApplyTitleBarColors(bar, 0xFFFFFFFF, 0xFFE5E5E5);
-        }
-    }
-
-    private static void ApplyTitleBarColors(
-        Microsoft.UI.Windowing.AppWindowTitleBar bar,
-        uint background,
-        uint hover)
-    {
-        var bg = Windows.UI.Color.FromArgb(
-            (byte)(background >> 24), (byte)(background >> 16), (byte)(background >> 8), (byte)background);
-        var hv = Windows.UI.Color.FromArgb(
-            (byte)(hover >> 24), (byte)(hover >> 16), (byte)(hover >> 8), (byte)hover);
-        var fg = Luminance(background) < 128
+        var dark = theme is "Dark" or "Gray";
+        bar.ForegroundColor = dark
             ? Windows.UI.Color.FromArgb(255, 240, 240, 240)
             : Windows.UI.Color.FromArgb(255, 26, 26, 26);
-        bar.ForegroundColor = fg;
-        bar.BackgroundColor = bg;
-        bar.ButtonForegroundColor = fg;
-        bar.ButtonBackgroundColor = bg;
-        bar.ButtonHoverForegroundColor = fg;
-        bar.ButtonHoverBackgroundColor = hv;
-        bar.ButtonPressedBackgroundColor = bg;
-        bar.ButtonInactiveBackgroundColor = bg;
-        bar.ButtonInactiveForegroundColor = Windows.UI.Color.FromArgb(255, 150, 150, 150);
-    }
-
-    private static int Luminance(uint argb)
-    {
-        var r = (byte)(argb >> 16);
-        var g = (byte)(argb >> 8);
-        var b = (byte)argb;
-        return (r * 299 + g * 587 + b * 114) / 1000;
+        bar.ButtonForegroundColor = bar.ForegroundColor;
+        bar.ButtonHoverForegroundColor = dark
+            ? Microsoft.UI.Colors.White
+            : Microsoft.UI.Colors.Black;
+        bar.ButtonHoverBackgroundColor = dark
+            ? Windows.UI.Color.FromArgb(255, 66, 66, 66)
+            : Windows.UI.Color.FromArgb(255, 229, 229, 229);
+        bar.ButtonBackgroundColor = Microsoft.UI.Colors.Transparent;
+        bar.ButtonInactiveBackgroundColor = Microsoft.UI.Colors.Transparent;
     }
 
     private async void OnLoaded(object sender, RoutedEventArgs e)
@@ -194,23 +169,54 @@ public sealed partial class MainWindow : Window
 
     private async Task ApplyThemeLiveAsync(string theme)
     {
-        var target = ThemeManager.ToElementTheme(theme);
-        if (Nav.RequestedTheme == target)
+        try
         {
-            // 深色↔灰色：先离开当前主题，重写覆盖字典后再回来，强制重新解析。
-            Nav.RequestedTheme = target == ElementTheme.Dark ? ElementTheme.Light : ElementTheme.Dark;
-            ThemePalette.Apply(theme);
-            await Task.Delay(60);
-        }
-        else
-        {
-            ThemePalette.Apply(theme);
-        }
+            // 不透明根底色先行：任何后续步骤异常都保证接缝不透窗口底色。
+            ApplyRootBackground(theme);
+            ApplyTitleBarTheme(theme);
+            var target = ThemeManager.ToElementTheme(theme);
+            if (Nav.RequestedTheme == target)
+            {
+                // 深色↔灰色：先离开当前主题，重写覆盖字典后再回来，强制重新解析。
+                Nav.RequestedTheme = target == ElementTheme.Dark ? ElementTheme.Light : ElementTheme.Dark;
+                ThemePalette.Apply(theme);
+                await Task.Delay(60);
+                Nav.RequestedTheme = target;
+            }
+            else
+            {
+                ThemePalette.Apply(theme);
+                Nav.RequestedTheme = target;
+            }
 
-        Nav.RequestedTheme = target;
-        ApplyTitleBarTheme(theme);
-        SearchBox.RequestedTheme = target;
-        ThemeManager.CurrentTheme = theme;
+            SearchBox.RequestedTheme = target;
+            ThemeManager.CurrentTheme = theme;
+        }
+        catch (Exception exception)
+        {
+            // 主题切换失败回滚到安全状态：仅根底色与元素主题，避免半更新。
+            ApplyRootBackground(theme);
+            Nav.RequestedTheme = ThemeManager.ToElementTheme(theme);
+            LogThemeError(exception);
+        }
+    }
+
+    /// <summary>主题切换异常落盘（诊断用，不影响正常流程）。</summary>
+    private static void LogThemeError(Exception exception)
+    {
+        try
+        {
+            var dir = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                "MijiaProductGallery", "logs");
+            Directory.CreateDirectory(dir);
+            File.AppendAllText(
+                Path.Combine(dir, "theme-error.log"),
+                $"{DateTime.Now:HH:mm:ss.fff} {exception}{Environment.NewLine}");
+        }
+        catch
+        {
+        }
     }
 
     private void ShowGallery(bool favorites = false, bool recent = false)

@@ -4,56 +4,77 @@
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     Title="米家产品示例图库">
-    <NavigationView
-        x:Name="Nav"
-        PaneDisplayMode="Left"
-        IsBackButtonVisible="Collapsed"
-        IsSettingsVisible="False"
-        OpenPaneLength="180"
-        ItemInvoked="OnItemInvoked">
-        <NavigationView.AutoSuggestBox>
-            <AutoSuggestBox
-                x:Name="SearchBox"
-                PlaceholderText="搜索产品..."
-                QueryIcon="Find"
-                TextChanged="OnSearchTextChanged"
-                QuerySubmitted="OnSearchQuerySubmitted" />
-        </NavigationView.AutoSuggestBox>
-        <NavigationView.KeyboardAccelerators>
-            <KeyboardAccelerator Modifiers="Control" Key="F" Invoked="OnCtrlFInvoked" />
-        </NavigationView.KeyboardAccelerators>
-        <NavigationView.MenuItems>
-            <NavigationViewItem Content="图库" Tag="gallery" IsSelected="True">
-                <NavigationViewItem.Icon>
-                    <SymbolIcon Symbol="Pictures" />
-                </NavigationViewItem.Icon>
-            </NavigationViewItem>
-            <NavigationViewItem Content="收藏" Tag="favorites">
-                <NavigationViewItem.Icon>
-                    <SymbolIcon Symbol="Favorite" />
-                </NavigationViewItem.Icon>
-            </NavigationViewItem>
-            <NavigationViewItem Content="最近使用" Tag="recent">
-                <NavigationViewItem.Icon>
-                    <SymbolIcon Symbol="Clock" />
-                </NavigationViewItem.Icon>
-            </NavigationViewItem>
-            <NavigationViewItem Content="统计" Tag="stats">
-                <NavigationViewItem.Icon>
-                    <SymbolIcon Symbol="Calculator" />
-                </NavigationViewItem.Icon>
-            </NavigationViewItem>
-            <NavigationViewItem Content="同步中心" Tag="sync">
-                <NavigationViewItem.Icon>
-                    <SymbolIcon Symbol="Sync" />
-                </NavigationViewItem.Icon>
-            </NavigationViewItem>
-            <NavigationViewItem Content="设置" Tag="settings">
-                <NavigationViewItem.Icon>
-                    <SymbolIcon Symbol="Setting" />
-                </NavigationViewItem.Icon>
-            </NavigationViewItem>
-        </NavigationView.MenuItems>
-        <Frame x:Name="ContentFrame" />
-    </NavigationView>
+    <!-- 内容延伸进标题栏：整个窗口客户区由应用底色铺满，接缝不再透出窗口底色；
+         拖拽区为顶部标题条（SetTitleBar 指定），右上系统按钮由系统绘制 -->
+    <Grid x:Name="WindowGrid">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="48" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+        <Grid Grid.Row="0" x:Name="TitleBarDragArea">
+            <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="14,0,0,0" Spacing="8">
+                <Image
+                    Source="app.ico"
+                    Width="16"
+                    Height="16" />
+                <TextBlock
+                    Text="米家产品示例图库"
+                    FontSize="12"
+                    VerticalAlignment="Center" />
+            </StackPanel>
+        </Grid>
+        <NavigationView
+            x:Name="Nav"
+            Grid.Row="1"
+            PaneDisplayMode="Left"
+            IsBackButtonVisible="Collapsed"
+            IsSettingsVisible="False"
+            OpenPaneLength="180"
+            ItemInvoked="OnItemInvoked">
+            <NavigationView.AutoSuggestBox>
+                <AutoSuggestBox
+                    x:Name="SearchBox"
+                    PlaceholderText="搜索产品..."
+                    QueryIcon="Find"
+                    TextChanged="OnSearchTextChanged"
+                    QuerySubmitted="OnSearchQuerySubmitted" />
+            </NavigationView.AutoSuggestBox>
+            <NavigationView.KeyboardAccelerators>
+                <KeyboardAccelerator Modifiers="Control" Key="F" Invoked="OnCtrlFInvoked" />
+            </NavigationView.KeyboardAccelerators>
+            <NavigationView.MenuItems>
+                <NavigationViewItem Content="图库" Tag="gallery" IsSelected="True">
+                    <NavigationViewItem.Icon>
+                        <SymbolIcon Symbol="Pictures" />
+                    </NavigationViewItem.Icon>
+                </NavigationViewItem>
+                <NavigationViewItem Content="收藏" Tag="favorites">
+                    <NavigationViewItem.Icon>
+                        <SymbolIcon Symbol="Favorite" />
+                    </NavigationViewItem.Icon>
+                </NavigationViewItem>
+                <NavigationViewItem Content="最近使用" Tag="recent">
+                    <NavigationViewItem.Icon>
+                        <SymbolIcon Symbol="Clock" />
+                    </NavigationViewItem.Icon>
+                </NavigationViewItem>
+                <NavigationViewItem Content="统计" Tag="stats">
+                    <NavigationViewItem.Icon>
+                        <SymbolIcon Symbol="Calculator" />
+                    </NavigationViewItem.Icon>
+                </NavigationViewItem>
+                <NavigationViewItem Content="同步中心" Tag="sync">
+                    <NavigationViewItem.Icon>
+                        <SymbolIcon Symbol="Sync" />
+                    </NavigationViewItem.Icon>
+                </NavigationViewItem>
+                <NavigationViewItem Content="设置" Tag="settings">
+                    <NavigationViewItem.Icon>
+                        <SymbolIcon Symbol="Setting" />
+                    </NavigationViewItem.Icon>
+                </NavigationViewItem>
+            </NavigationView.MenuItems>
+            <Frame x:Name="ContentFrame" />
+        </NavigationView>
+    </Grid>
 </Window>
