@@ -73,18 +73,32 @@ public sealed partial class GalleryPage : Page
 
     private void OnElementPrepared(ItemsRepeater sender, ItemsRepeaterElementPreparedEventArgs args)
     {
-        // ElementPrepared 时 Content 未必已赋值，改在 Loaded（内容就绪）后再接线。
+        // Content 通常在 Prepared 时已就位，直接接线；
+        // 少数场景 Content 后到，由 Loaded 兜底补接线。
         if (args.Element is ContentPresenter presenter)
         {
+            if (presenter.Content is ProductCardControl control)
+            {
+                WireCard(control);
+                return;
+            }
+
             presenter.Loaded += OnCardPresenterLoaded;
         }
     }
 
     private void OnCardPresenterLoaded(object sender, RoutedEventArgs e)
     {
-        if (sender is not ContentPresenter presenter
-            || presenter.Content is not ProductCardControl control
-            || control.InteractionWired)
+        if (sender is ContentPresenter presenter
+            && presenter.Content is ProductCardControl control)
+        {
+            WireCard(control);
+        }
+    }
+
+    private void WireCard(ProductCardControl control)
+    {
+        if (control.InteractionWired)
         {
             return;
         }

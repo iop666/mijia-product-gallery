@@ -56,6 +56,14 @@ public sealed partial class ProductCardControl : UserControl
         RootGrid.PointerExited += OnPointerExited;
     }
 
+    private IFavoriteService Favorites => App.Services.GetRequiredService<IFavoriteService>();
+
+    private IUsageService Usage => App.Services.GetRequiredService<IUsageService>();
+
+    private ISystemClipboard Clipboard => App.Services.GetRequiredService<ISystemClipboard>();
+
+    private IImageStore ImageStore => App.Services.GetRequiredService<IImageStore>();
+
     public ProductCard? Card
     {
         get => card;
@@ -143,7 +151,7 @@ public sealed partial class ProductCardControl : UserControl
         VisualStateManager.GoToState(this, "Pressed", useTransitions: false);
     }
 
-    private void OnPointerReleased(object sender, PointerRoutedEventArgs e)
+    private async void OnPointerReleased(object sender, PointerRoutedEventArgs e)
     {
         VisualStateManager.GoToState(this, "Normal", useTransitions: false);
 
@@ -151,10 +159,53 @@ public sealed partial class ProductCardControl : UserControl
         var moved = DragGesture.ShouldStartByMove(
             position.X - pressedPoint.X,
             position.Y - pressedPoint.Y);
-        if (!moved && Card is not null)
+        if (moved || Card is null)
         {
-            DetailRequested?.Invoke(this, Card);
+            return;
         }
+
+        try
+        {
+            await Usage.RecordAsync(Card.ProductId, UsageType.View, DateTimeOffset.UtcNow.ToUnixTimeSeconds());
+        }
+        catch
+        {
+            // 查看计数失败不影响详情展示。
+        }
+
+        var dialog = new ContentDialog
+        {
+            XamlRoot = RootGrid.XamlRoot,
+            RequestedTheme = ActualTheme,
+            Title = Card.Name,
+            CloseButtonText = "关闭",
+            DefaultButton = ContentDialogButton.Close,
+        };
+        var info = new StackPanel { Spacing = 8 };
+        info.Children.Add(new TextBlock
+        {
+            Text = Card.Model,
+            FontSize = 13,
+            Foreground = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["TextFillColorSecondaryBrush"],
+        });
+        info.Children.Add(new TextBlock
+        {
+            Text = $"{Card.Brand} · {Card.Category}",
+            FontSize = 13,
+            Foreground = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["TextFillColorTertiaryBrush"],
+        });
+        if (Card.ImageFileName is not null)
+        {
+            info.Children.Add(new TextBlock
+            {
+                Text = $"图片文件：{Card.ImageFileName}",
+                FontSize = 12,
+                TextWrapping = TextWrapping.Wrap,
+                Foreground = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["TextFillColorSecondaryBrush"],
+            });
+        }
+        dialog.Content = info;
+        _ = dialog.ShowAsync();
     }
 
     private void OnPointerEntered(object sender, PointerRoutedEventArgs e)
@@ -222,6 +273,7 @@ public sealed partial class ProductCardControl : UserControl
         VisualStateManager.GoToState(this, "Normal", useTransitions: false);
         if (args.DropResult.HasFlag(DataPackageOperation.Copy) && Card is not null)
         {
+            _ = Usage.RecordAsync(Card.ProductId, UsageType.Drag, DateTimeOffset.UtcNow.ToUnixTimeSeconds());
             DragCompleted?.Invoke(this, Card);
         }
     }
