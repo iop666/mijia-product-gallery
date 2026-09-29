@@ -60,17 +60,23 @@ public sealed class NullToCollapsedConverter : Microsoft.UI.Xaml.Data.IValueConv
     }
 }
 
-/// <summary>缩略图磁盘路径 → BitmapImage 转换器（空路径返回 null；按卡片显示尺寸约束解码，高 DPI 下仍清晰且省内存）。</summary>
+/// <summary>
+/// 缩略图磁盘路径 → BitmapImage 转换器（空路径返回 null）。
+/// 经 LRU 缓存复用图像实例：快速滚动中卡片反复实化不再触发重复 IO/解码。
+/// 解码按卡片显示尺寸约束（逻辑像素），高 DPI 下仍清晰且省内存。
+/// </summary>
 public sealed class PathToImageConverter : Microsoft.UI.Xaml.Data.IValueConverter
 {
+    private static readonly MijiaProductGallery.App.Services.ThumbnailImageCache Cache = new();
+
     public object Convert(object value, Type targetType, object parameter, string language)
     {
         return value is string path && !string.IsNullOrWhiteSpace(path)
-            ? new BitmapImage(new Uri(path))
+            ? Cache.GetOrAdd(path, p => new BitmapImage(new Uri(p))
             {
                 DecodePixelType = DecodePixelType.Logical,
                 DecodePixelWidth = 320,
-            }
+            })
             : null!;
     }
 

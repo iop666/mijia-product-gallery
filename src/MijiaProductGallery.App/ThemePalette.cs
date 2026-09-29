@@ -1,47 +1,50 @@
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Media;
+using MijiaProductGallery.Core;
 using Windows.UI;
 
 namespace MijiaProductGallery.App;
 
 /// <summary>
-/// 灰色调色板（Adobe 风格中灰界面）：仅灰色模式挂载应用级画笔覆盖（元素主题为 Dark），
-/// 使黑色系设备图片不融入纯黑背景；切回其他主题时移除覆盖。
-/// 注意：不能通过 App 级 ThemeDictionaries 实现——空的 Dark 字典会遮蔽整个深色主题资源。
+/// 主题画笔应用器：把窗口/图层/导航窗格背景覆盖注册到应用资源的 MergedDictionaries
+/// （携带 Light/Dark 两套主题字典），实现不重启的实时主题切换。
+/// 放在 XamlControlsResources 之后的合并字典只覆盖显式提供的键，缺失键回落到完整默认主题，
+/// 因此不会出现"部分资源退化为浅色"的混色问题。灰色模式 = 深色主题字典的 Adobe 中灰取值。
 /// </summary>
 public static class ThemePalette
 {
-    private static readonly (string Key, uint Argb)[] GrayPalette =
-    {
-        ("ApplicationPageBackgroundThemeBrush", 0xFF2D2D2D),
-        ("SolidBackgroundFillColorBase", 0xFF2D2D2D),
-        ("SolidBackgroundFillColorSecondary", 0xFF323232),
-        ("SolidBackgroundFillColorTertiary", 0xFF383838),
-        ("LayerFillColorDefault", 0xFF303030),
-        ("LayerFillColorSecondary", 0xFF2A2A2A),
-        ("CardBackgroundFillColorDefault", 0xFF333333),
-        ("CardBackgroundFillColorSecondary", 0xFF383838),
-        ("CardStrokeColorDefault", 0xFF212121),
-        ("ControlFillColorDefault", 0xFF333333),
-    };
+    private static ResourceDictionary? registered;
 
     public static void Apply(string? theme)
     {
         var resources = Application.Current.Resources;
-        if (theme == "Gray")
+        if (registered is null)
         {
-            foreach (var (key, argb) in GrayPalette)
-            {
-                resources[key] = Solid(argb);
-            }
+            registered = new ResourceDictionary();
+            registered.ThemeDictionaries["Light"] = Build(ThemePaletteDefinition.For("Light"));
+            registered.ThemeDictionaries["Dark"] = Build(ThemePaletteDefinition.For("Dark"));
+            resources.MergedDictionaries.Add(registered);
         }
-        else
+
+        // 灰色模式与深色共用 Dark 主题字典，按当前选择重写其取值。
+        var darkValues = theme == "Gray" ? ThemePaletteDefinition.For("Gray") : ThemePaletteDefinition.For("Dark");
+        var dark = (ResourceDictionary)registered.ThemeDictionaries["Dark"];
+        dark.Clear();
+        foreach (var pair in darkValues)
         {
-            foreach (var (key, _) in GrayPalette)
-            {
-                resources.Remove(key);
-            }
+            dark[pair.Key] = Solid(pair.Value);
         }
+    }
+
+    private static ResourceDictionary Build(IReadOnlyDictionary<string, uint> palette)
+    {
+        var dict = new ResourceDictionary();
+        foreach (var pair in palette)
+        {
+            dict[pair.Key] = Solid(pair.Value);
+        }
+
+        return dict;
     }
 
     private static Brush Solid(uint argb)

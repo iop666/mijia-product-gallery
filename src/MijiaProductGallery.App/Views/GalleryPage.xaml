@@ -7,6 +7,10 @@
     xmlns:local="using:MijiaProductGallery.App.Converters"
     xmlns:vm="using:MijiaProductGallery.ViewModels">
 
+    <Page.KeyboardAccelerators>
+        <KeyboardAccelerator Key="Escape" Invoked="OnEscapeInvoked" />
+    </Page.KeyboardAccelerators>
+
     <Page.Resources>
         <DataTemplate x:Key="ProductCardTemplate" x:DataType="vm:ProductCard">
             <controls:ProductCardControl Card="{x:Bind}" />
@@ -282,6 +286,7 @@
                         Background="Transparent"
                         BorderThickness="0"
                         Padding="8"
+                        AutomationProperties.Name="关闭筛选面板"
                         ToolTipService.ToolTip="关闭筛选面板"
                         Click="OnFilterToggleClick">
                         <FontIcon Glyph="&#xE711;" FontSize="12" />

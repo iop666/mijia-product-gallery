@@ -286,6 +286,17 @@ public sealed partial class GalleryPage : Page
         }
     }
 
+    /// <summary>Esc：筛选面板打开时优先关闭面板，其余场景交给原生处理。</summary>
+    private void OnEscapeInvoked(Microsoft.UI.Xaml.Input.KeyboardAccelerator sender,
+        Microsoft.UI.Xaml.Input.KeyboardAcceleratorInvokedEventArgs args)
+    {
+        if (vm is { FilterPane.IsOpen: true })
+        {
+            vm.FilterPane.IsOpen = false;
+            args.Handled = true;
+        }
+    }
+
     private void OnBrandSearchTextChanged(object sender, TextChangedEventArgs e)
     {
         if (vm is null)

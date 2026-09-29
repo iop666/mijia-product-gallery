@@ -45,6 +45,9 @@ public sealed partial class ProductCardControl : UserControl
     {
         InitializeComponent();
         RootGrid.CanDrag = true;
+        RootGrid.IsTabStop = true;
+        RootGrid.UseSystemFocusVisuals = true;
+        RootGrid.KeyDown += OnRootKeyDown;
         RootGrid.DragStarting += OnRootDragStarting;
         RootGrid.DropCompleted += OnRootDropCompleted;
         RootGrid.PointerPressed += OnPointerPressed;
@@ -60,8 +63,26 @@ public sealed partial class ProductCardControl : UserControl
         {
             card = value;
             DataContext = value;
+            // UI Automation 语义：读屏与键盘用户可识别卡片指向的产品。
+            Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(
+                RootGrid, value is null ? string.Empty : $"{value.Name}（{value.Model}）");
             UpdateMenuStates();
             RequestThumbnail();
+        }
+    }
+
+    /// <summary>键盘操作：Enter/Space 打开详情（与左键单击一致）。</summary>
+    private void OnRootKeyDown(object sender, Microsoft.UI.Xaml.Input.KeyRoutedEventArgs e)
+    {
+        if (Card is null)
+        {
+            return;
+        }
+
+        if (e.Key is Windows.System.VirtualKey.Enter or Windows.System.VirtualKey.Space)
+        {
+            e.Handled = true;
+            DetailRequested?.Invoke(this, Card);
         }
     }
 

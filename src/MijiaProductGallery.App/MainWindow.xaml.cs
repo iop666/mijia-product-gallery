@@ -35,15 +35,27 @@ public sealed partial class MainWindow : Window
         Title = "米家产品示例图库";
         AppWindow.SetIcon(Path.Combine(AppContext.BaseDirectory, "app.ico"));
         ApplyTitleBarTheme(App.InitialTheme);
-        if (App.InitialTheme == "Gray")
-        {
-            // 灰色模式：导航根部直接铺 Adobe 风格中灰，不依赖主题资源解析。
-            Nav.Background = new Microsoft.UI.Xaml.Media.SolidColorBrush(
-                Windows.UI.Color.FromArgb(255, 45, 45, 45));
-        }
-
         App.Services.GetRequiredService<SettingsViewModel>().ThemeChanged += OnThemeChanged;
         Nav.Loaded += OnLoaded;
+        Nav.SizeChanged += OnNavSizeChanged;
+    }
+
+    /// <summary>窗口最小逻辑尺寸 900×600：过小时回弹到最小尺寸，保证布局稳定。</summary>
+    private void OnNavSizeChanged(object sender, SizeChangedEventArgs e)
+    {
+        if (e.NewSize.Width >= 900 && e.NewSize.Height >= 600)
+        {
+            return;
+        }
+
+        var scale = Nav.XamlRoot?.RasterizationScale ?? 1.0;
+        var width = (int)Math.Max(900 * scale, 1);
+        var height = (int)Math.Max(600 * scale, 1);
+        var size = AppWindow.Size;
+        if (size.Width != width || size.Height != height)
+        {
+            AppWindow.Resize(new Windows.Graphics.SizeInt32(width, height));
+        }
     }
 
     /// <summary>默认标题栏不跟随应用主题，深色系模式下显式设置标题栏与按钮颜色。</summary>
@@ -134,24 +146,20 @@ public sealed partial class MainWindow : Window
         }
     }
 
-    /// <summary>主题为应用级资源，切换后以新主题重启应用（设置页已持久化新值）。
-    /// 与启动主题相同的变更（设置页加载时恢复持久化值）不重启。</summary>
+    /// <summary>主题实时切换：窗口实例保持不变，当前页面与主要 UI 状态全部保留。
+    /// 元素级资源随根元素 RequestedTheme 翻转，窗口/图层背景经画笔覆盖表更新。</summary>
     private void OnThemeChanged(string theme)
     {
-        if (theme == App.InitialTheme)
-        {
-            return;
-        }
-
         DispatcherQueue.TryEnqueue(() =>
         {
-            var exe = Environment.ProcessPath;
-            if (!string.IsNullOrEmpty(exe))
+            Nav.RequestedTheme = theme switch
             {
-                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(exe) { UseShellExecute = true });
-            }
-
-            Application.Current.Exit();
+                "Light" => ElementTheme.Light,
+                "Dark" or "Gray" => ElementTheme.Dark,
+                _ => ElementTheme.Default,
+            };
+            ThemePalette.Apply(theme);
+            ApplyTitleBarTheme(theme);
         });
     }
 
