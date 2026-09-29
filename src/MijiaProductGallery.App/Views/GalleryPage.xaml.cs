@@ -19,6 +19,8 @@ public sealed partial class GalleryPage : Page
 {
     private GalleryViewModel? vm;
     private readonly IUsageService usage;
+    private ContentDialog? collectionManagerDialog;
+    private readonly List<ProductCardControl> liveCards = [];
 
     public GalleryViewModel Vm => vm ?? throw new InvalidOperationException("图库视图模型尚未初始化");
 
@@ -30,15 +32,35 @@ public sealed partial class GalleryPage : Page
         usage = App.Services.GetRequiredService<IUsageService>();
         Loaded += OnLoaded;
         CardsRepeater.ElementPrepared += OnElementPrepared;
+        CardsRepeater.ElementClearing += OnElementClearing;
         vm.PropertyChanged += OnGalleryPropertyChanged;
+        vm.CollectionsReloaded += OnCollectionsReloaded;
     }
 
-    /// <summary>翻页后滚动位置回到顶部。</summary>
+    /// <summary>收藏夹列表重建后同步选择框显示（ComboBox 对异步重建后的源推送会丢失）。</summary>
+    private void OnCollectionsReloaded()
+    {
+        DispatcherQueue.TryEnqueue(() =>
+        {
+            if (vm is not null)
+            {
+                CollectionBox.SelectedItem = vm.SelectedCollection;
+                UpdateQuickRemoveLabels();
+            }
+        });
+    }
+
+    /// <summary>翻页后滚动位置回到顶部；视图/合集变化时刷新快速移除项。</summary>
     private void OnGalleryPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
     {
         if (e.PropertyName == nameof(MijiaProductGallery.ViewModels.GalleryViewModel.CurrentPage))
         {
             DispatcherQueue.TryEnqueue(() => CardsScroll.ChangeView(null, 0, null, disableAnimation: false));
+        }
+        else if (e.PropertyName is nameof(MijiaProductGallery.ViewModels.GalleryViewModel.Mode)
+            or nameof(MijiaProductGallery.ViewModels.GalleryViewModel.SelectedCollection))
+        {
+            UpdateQuickRemoveLabels();
         }
     }
 
@@ -73,45 +95,68 @@ public sealed partial class GalleryPage : Page
 
     private void OnElementPrepared(ItemsRepeater sender, ItemsRepeaterElementPreparedEventArgs args)
     {
-        // Content 通常在 Prepared 时已就位，直接接线；
-        // 少数场景 Content 后到，由 Loaded 兜底补接线。
-        if (args.Element is ContentPresenter presenter)
-        {
-            if (presenter.Content is ProductCardControl control)
-            {
-                WireCard(control);
-                return;
-            }
-
-            presenter.Loaded += OnCardPresenterLoaded;
-        }
-    }
-
-    private void OnCardPresenterLoaded(object sender, RoutedEventArgs e)
-    {
-        if (sender is ContentPresenter presenter
-            && presenter.Content is ProductCardControl control)
+        // 卡片模板根即 ProductCardControl（x:Bind 直接实例化，无 ContentPresenter 包装）。
+        if (args.Element is ProductCardControl control)
         {
             WireCard(control);
         }
     }
 
-    private void WireCard(ProductCardControl control)
+    private void OnElementClearing(ItemsRepeater sender, ItemsRepeaterElementClearingEventArgs args)
     {
-        if (control.InteractionWired)
+        if (args.Element is ProductCardControl control)
         {
-            return;
+            liveCards.Remove(control);
         }
-
-        control.InteractionWired = true;
-        control.DetailRequested += OnCardDetailRequested;
-        control.DragCompleted += OnCardDragCompleted;
-        control.ActionFailed += OnCardActionFailed;
-        control.ActionInfo += OnCardActionInfo;
-        control.NotDraggableRequested += OnCardNotDraggable;
     }
 
-    /// <summary>左键单击：ViewCount+1，并打开占位详情（完整详情页在后续阶段实现）。</summary>
+    private void WireCard(ProductCardControl control)
+    {
+        // ItemsRepeater 会复用已接线实例（InteractionWired=true），
+        // 复用时仍需登记 liveCards 并刷新快速移除标签。
+        if (!control.InteractionWired)
+        {
+            control.InteractionWired = true;
+            control.DetailRequested += OnCardDetailRequested;
+            control.DragCompleted += OnCardDragCompleted;
+            control.ActionFailed += OnCardActionFailed;
+            control.ActionInfo += OnCardActionInfo;
+            control.QuickRemoveRequested += OnCardQuickRemove;
+            control.CreateCollectionRequested += OnCardCreateCollectionRequested;
+            control.NotDraggableRequested += OnCardNotDraggable;
+        }
+
+        if (!liveCards.Contains(control))
+        {
+            liveCards.Add(control);
+        }
+
+        control.SetQuickRemove(CurrentQuickRemoveLabel());
+    }
+
+    /// <summary>当前视图对应的快速移除项文案（Normal 视图隐藏；默认收藏=取消收藏；合集=从合集移除）。</summary>
+    private string? CurrentQuickRemoveLabel()
+    {
+        if (vm is null || !vm.IsFavoritesMode)
+        {
+            return null;
+        }
+
+        return vm.CurrentCollectionName is { } name ? $"从「{name}」移除" : "取消收藏";
+    }
+
+    /// <summary>视图/合集变化时刷新全部已实例化卡片的快速移除项
+    /// （根层菜单在 Opening 时布局已冻结，不能在 Opening 中增删项）。</summary>
+    private void UpdateQuickRemoveLabels()
+    {
+        var label = CurrentQuickRemoveLabel();
+        foreach (var control in liveCards)
+        {
+            control.SetQuickRemove(label);
+        }
+    }
+
+    /// <summary>左键单击：ViewCount+1，并打开详情对话框（完整详情页另行提供）。</summary>
     private async void OnCardDetailRequested(object? sender, ProductCard card)
     {
         try
@@ -140,7 +185,7 @@ public sealed partial class GalleryPage : Page
                     new TextBlock { Text = $"分类：{card.Category}" },
                     new TextBlock
                     {
-                        Text = "完整详情页将在后续阶段提供。",
+                        Text = "型号、品牌、分类信息如上，图片可拖拽或复制使用。",
                         Foreground = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["TextFillColorSecondaryBrush"],
                     },
                 },
@@ -169,174 +214,184 @@ public sealed partial class GalleryPage : Page
         ShowNotice($"「{card.Name}」无图片，不能拖拽");
     }
 
-    /// <summary>管理收藏夹：新建/重命名/删除（行内二级态，避免对话框叠加）。</summary>
+    /// <summary>管理收藏夹：ContentDialog 内嵌 CollectionManagerView（列表/重命名/新建）；删除确认由本页协调。</summary>
     private async void OnManageCollectionsClick(object sender, RoutedEventArgs e)
     {
-        var collections = App.Services.GetRequiredService<ICollectionRepository>();
-        var nameBox = new TextBox { PlaceholderText = "输入新收藏夹名称", MinWidth = 220 };
-        var createButton = new Button { Content = "新建" };
-        var createRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
-        createRow.Children.Add(nameBox);
-        createRow.Children.Add(createButton);
+        await ShowCollectionManagerAsync();
+    }
 
-        var listPanel = new StackPanel { Spacing = 4 };
-
+    private async Task ShowCollectionManagerAsync()
+    {
+        var view = new CollectionManagerView(Vm);
+        view.DeleteRequested += OnCollectionDeleteRequested;
         var dialog = new ContentDialog
         {
             Title = "管理收藏夹",
             XamlRoot = XamlRoot,
             RequestedTheme = ThemeManager.ToElementTheme(ThemeManager.CurrentTheme),
-            Content = new StackPanel { Spacing = 12, Children = { createRow, listPanel } },
+            Content = view,
             CloseButtonText = "完成",
             DefaultButton = ContentDialogButton.Close,
         };
+        collectionManagerDialog = dialog;
+        _ = await dialog.ShowAsync();
+        collectionManagerDialog = null;
+    }
 
-        async Task RefreshListAsync()
+    /// <summary>删除确认：先收起管理框（ContentDialog 同时只能开一个）→ 确认 → 重开管理框。</summary>
+    private async void OnCollectionDeleteRequested(object? sender, (int Id, string Name) request)
+    {
+        collectionManagerDialog?.Hide();
+        collectionManagerDialog = null;
+        await Task.Delay(150);
+
+        var confirm = new ContentDialog
         {
-            listPanel.Children.Clear();
-            IReadOnlyList<Collection> rows;
-            try
+            Title = "删除收藏夹？",
+            XamlRoot = XamlRoot,
+            RequestedTheme = ThemeManager.ToElementTheme(ThemeManager.CurrentTheme),
+            Content = new TextBlock
             {
-                rows = await collections.GetAllAsync();
-            }
-            catch (System.Runtime.InteropServices.COMException)
-            {
-                return;
-            }
+                TextWrapping = TextWrapping.Wrap,
+                MaxWidth = 340,
+                Text = $"将删除「{request.Name}」。收藏夹本身会被删除，其中的产品不会被删除，也不会影响其他收藏夹中的产品。",
+            },
+            PrimaryButtonText = "删除",
+            CloseButtonText = "取消",
+            DefaultButton = ContentDialogButton.Close,
+        };
 
-            if (rows.Count == 0)
+        // ContentDialog 同时只能显示一个：管理框已收起，确认结束后重开。
+        var result = await confirm.ShowAsync();
+        if (result == ContentDialogResult.Primary)
+        {
+            var (success, error) = await Vm.DeleteCollectionAsync(request.Id);
+            if (!success)
             {
-                listPanel.Children.Add(new TextBlock
-                {
-                    Text = "暂无自定义收藏夹",
-                    Opacity = 0.6,
-                    FontSize = 12,
-                });
-                return;
-            }
-
-            foreach (var row in rows)
-            {
-                listPanel.Children.Add(BuildCollectionRow(collections, row, RefreshListAsync));
+                ShowNotice(error ?? "删除失败", InfoBarSeverity.Error);
             }
         }
 
-        createButton.Click += async (_, _) =>
+        await ShowCollectionManagerAsync();
+    }
+
+    /// <summary>快速移除：默认收藏视图取消星标；合集视图仅移出该合集（产品与星标收藏不受影响）。</summary>
+    private async void OnCardQuickRemove(object? sender, ProductCard card)
+    {
+        var collectionName = vm?.CurrentCollectionName;
+        if (collectionName is { } name)
         {
-            var name = nameBox.Text.Trim();
-            if (name.Length == 0)
+            var collectionId = vm?.SelectedCollection?.Id ?? 0;
+            if (collectionId <= 0)
             {
                 return;
             }
 
             try
             {
-                await collections.CreateAsync(name, DateTimeOffset.UtcNow.ToUnixTimeSeconds());
-                nameBox.Text = string.Empty;
-                _ = Vm.ReloadCollectionsAsync();
+                await App.Services.GetRequiredService<ICollectionRepository>()
+                    .RemoveItemAsync(collectionId, card.ProductId);
+                ShowNotice($"已从「{name}」移除");
             }
             catch (Exception exception) when (exception is UnauthorizedAccessException
                 or InvalidOperationException
                 or System.Runtime.InteropServices.COMException)
             {
-                ShowNotice($"新建收藏夹失败：{exception.Message}", InfoBarSeverity.Error);
+                ShowNotice($"移除失败：{exception.Message}", InfoBarSeverity.Error);
             }
 
-            await RefreshListAsync();
-        };
+            return;
+        }
 
-        _ = RefreshListAsync();
-        _ = await dialog.ShowAsync();
+        if (vm is not null)
+        {
+            await vm.ToggleFavoriteAsync(card);
+        }
     }
 
-    /// <summary>收藏夹管理行：名称 | 重命名 | 删除；行内进入重命名/确认删除二级态。</summary>
-    private StackPanel BuildCollectionRow(
-        ICollectionRepository collections,
-        Collection row,
-        Func<Task> refresh)
+    /// <summary>从卡片菜单新建收藏夹并加入该产品（重名/空名在对话框内提示后可重试）。</summary>
+    private async void OnCardCreateCollectionRequested(object? sender, ProductCard card)
     {
-        var panel = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6 };
-        var nameText = new TextBlock
+        var nameText = string.Empty;
+        string? error = null;
+        while (true)
         {
-            Text = row.Name,
-            VerticalAlignment = VerticalAlignment.Center,
-            MaxWidth = 200,
-            TextTrimming = TextTrimming.CharacterEllipsis,
-        };
-        var renameButton = new Button { Content = "重命名" };
-        var deleteButton = new Button { Content = "删除" };
-        panel.Children.Add(nameText);
-        panel.Children.Add(renameButton);
-        panel.Children.Add(deleteButton);
-
-        renameButton.Click += (_, _) =>
-        {
-            var box = new TextBox { Text = row.Name, MinWidth = 180 };
-            var save = new Button { Content = "保存" };
-            var cancel = new Button { Content = "取消" };
-            panel.Children.Clear();
-            panel.Children.Add(box);
-            panel.Children.Add(save);
-            panel.Children.Add(cancel);
-            save.Click += async (_, _) =>
+            var nameBox = new TextBox
             {
-                var newName = box.Text.Trim();
-                if (newName.Length == 0 || newName == row.Name)
-                {
-                    await refresh();
-                    return;
-                }
+                PlaceholderText = "收藏夹名称",
+                MaxLength = 40,
+                MinWidth = 240,
+                Text = nameText,
+            };
+            var errorText = new TextBlock
+            {
+                FontSize = 12,
+                Text = error ?? string.Empty,
+                Foreground = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["SystemFillColorCriticalBrush"],
+                Visibility = error is null ? Visibility.Collapsed : Visibility.Visible,
+            };
+            var dialog = new ContentDialog
+            {
+                Title = "新建收藏夹",
+                XamlRoot = XamlRoot,
+                RequestedTheme = ThemeManager.ToElementTheme(ThemeManager.CurrentTheme),
+                Content = new StackPanel { Spacing = 10, Children = { nameBox, errorText } },
+                PrimaryButtonText = "创建",
+                CloseButtonText = "取消",
+                DefaultButton = ContentDialogButton.Primary,
+            };
 
+            if (await dialog.ShowAsync() != ContentDialogResult.Primary)
+            {
+                return;
+            }
+
+            nameText = nameBox.Text;
+            var (success, createError) = await Vm.CreateCollectionAsync(nameText);
+            if (success)
+            {
+                error = null;
                 try
                 {
-                    await collections.RenameAsync(row.Id, newName, DateTimeOffset.UtcNow.ToUnixTimeSeconds());
-                    _ = Vm.ReloadCollectionsAsync();
+                    var collectionId = Vm.SelectedCollection?.Id ?? 0;
+                    if (collectionId > 0)
+                    {
+                        await App.Services.GetRequiredService<ICollectionRepository>()
+                            .AddItemAsync(collectionId, card.ProductId, DateTimeOffset.UtcNow.ToUnixTimeSeconds());
+                        ShowNotice($"已创建并加入收藏夹「{Vm.SelectedCollection?.Name}」");
+                    }
                 }
                 catch (Exception exception) when (exception is UnauthorizedAccessException
                     or InvalidOperationException
                     or System.Runtime.InteropServices.COMException)
                 {
-                    ShowNotice($"重命名失败：{exception.Message}", InfoBarSeverity.Error);
+                    ShowNotice($"加入收藏夹失败：{exception.Message}", InfoBarSeverity.Error);
                 }
 
-                await refresh();
-            };
-            cancel.Click += (_, _) => _ = refresh();
-        };
+                return;
+            }
 
-        deleteButton.Click += (_, _) =>
+            error = createError;
+        }
+    }
+
+    /// <summary>收藏视图空状态：跳回全部产品图库。</summary>
+    private void OnBrowseGalleryClick(object sender, RoutedEventArgs e)
+    {
+        (App.MainWindow as MainWindow)?.ShowGallery();
+    }
+
+    /// <summary>收藏夹下拉交互选择（SelectedItem 为 OneWay 绑定，避免列表重建时写回 null）。</summary>
+    private void OnCollectionBoxSelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (vm is null
+            || sender is not ComboBox { SelectedItem: CollectionOption option }
+            || ReferenceEquals(option, vm.SelectedCollection))
         {
-            var confirmText = new TextBlock
-            {
-                Text = $"删除「{row.Name}」？产品本身不受影响",
-                VerticalAlignment = VerticalAlignment.Center,
-            };
-            var confirm = new Button { Content = "确认删除" };
-            var cancel = new Button { Content = "取消" };
-            panel.Children.Clear();
-            panel.Children.Add(confirmText);
-            panel.Children.Add(confirm);
-            panel.Children.Add(cancel);
-            confirm.Click += async (_, _) =>
-            {
-                try
-                {
-                    await collections.DeleteAsync(row.Id);
-                    _ = Vm.ReloadCollectionsAsync();
-                }
-                catch (Exception exception) when (exception is UnauthorizedAccessException
-                    or InvalidOperationException
-                    or System.Runtime.InteropServices.COMException)
-                {
-                    ShowNotice($"删除失败：{exception.Message}", InfoBarSeverity.Error);
-                }
+            return;
+        }
 
-                await refresh();
-            };
-            cancel.Click += (_, _) => _ = refresh();
-        };
-
-        return panel;
+        vm.SelectedCollection = option;
     }
 
     private void ShowNotice(string message, InfoBarSeverity severity = InfoBarSeverity.Informational)

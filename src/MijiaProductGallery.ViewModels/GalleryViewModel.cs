@@ -65,6 +65,9 @@ public partial class GalleryViewModel : ObservableObject
     private int searchGeneration;
     private bool optionsLoaded;
 
+    /// <summary>数据库当前没有任何产品（区分空图库与查询无结果）。</summary>
+    private bool databaseIsEmpty;
+
     public GalleryViewModel(
         IProductRepository products,
         ThumbnailLoadQueue thumbnailQueue,
@@ -104,7 +107,7 @@ public partial class GalleryViewModel : ObservableObject
 
     /// <summary>图库模式（全部产品/仅收藏）。</summary>
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(IsFavoritesMode))]
+    [NotifyPropertyChangedFor(nameof(IsFavoritesMode), nameof(IsFavoritesEmptyVisible))]
     private GalleryMode mode = GalleryMode.Normal;
 
     public bool IsFavoritesMode => Mode == GalleryMode.Favorites;
@@ -114,6 +117,7 @@ public partial class GalleryViewModel : ObservableObject
 
     /// <summary>当前选中的收藏夹（默认项 = 星标收藏语义）。</summary>
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(FavoritesEmptyText))]
     private CollectionOption? selectedCollection = CollectionOption.Default;
 
     /// <summary>ReloadCollectionsAsync 重建列表期间抑制切换重查。</summary>
@@ -122,7 +126,7 @@ public partial class GalleryViewModel : ObservableObject
     private HashSet<int> favoriteIds = new();
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(IsLoadingVisible), nameof(IsEmptyVisible), nameof(IsErrorVisible), nameof(IsReadyVisible), nameof(IsPagerVisible))]
+    [NotifyPropertyChangedFor(nameof(IsLoadingVisible), nameof(IsEmptyVisible), nameof(IsErrorVisible), nameof(IsReadyVisible), nameof(IsPagerVisible), nameof(IsFavoritesEmptyVisible))]
     private GalleryLoadState state = GalleryLoadState.Loading;
 
     [ObservableProperty]
@@ -139,6 +143,18 @@ public partial class GalleryViewModel : ObservableObject
     [ObservableProperty]
     private string? searchText;
 
+    /// <summary>收藏视图空状态：无搜索词且当前合集/星标收藏没有产品。</summary>
+    public bool IsFavoritesEmptyVisible =>
+        Mode == GalleryMode.Favorites
+        && State == GalleryLoadState.Ready
+        && TotalCount == 0
+        && string.IsNullOrWhiteSpace(SearchText);
+
+    /// <summary>收藏视图空状态文案（区分默认收藏与具体合集）。</summary>
+    public string FavoritesEmptyText => CurrentCollectionName is { } name
+        ? $"「{name}」还没有产品"
+        : "还没有收藏的产品";
+
     /// <summary>是否有任何激活的筛选（含关键字）。</summary>
     public bool HasActiveChips => ActiveChips.Count > 0;
 
@@ -154,7 +170,7 @@ public partial class GalleryViewModel : ObservableObject
 
     /// <summary>满足当前条件的总产品数（数据库侧 COUNT，与当前页行数无关）。</summary>
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(IsPagerVisible), nameof(CanGoNextPage), nameof(CanGoLastPage))]
+    [NotifyPropertyChangedFor(nameof(IsPagerVisible), nameof(CanGoNextPage), nameof(CanGoLastPage), nameof(IsFavoritesEmptyVisible))]
     private int totalCount;
 
     /// <summary>总页数（按每页数量向上取整）。</summary>
@@ -259,6 +275,7 @@ public partial class GalleryViewModel : ObservableObject
             return;
         }
 
+        databaseIsEmpty = await products.CountAsync(cancellationToken) == 0;
         searchGeneration++;
         await ExecuteAsync(SearchText ?? string.Empty, searchGeneration, cancellationToken);
     }
@@ -364,6 +381,9 @@ public partial class GalleryViewModel : ObservableObject
     }
 
     /// <summary>载入收藏夹列表；保持原选择，所选合集已被删除时回落默认并重查。</summary>
+    /// <summary>收藏夹列表重建完成（供视图在 UI 线程同步选择框显示）。</summary>
+    public event Action? CollectionsReloaded;
+
     public async Task ReloadCollectionsAsync(CancellationToken cancellationToken = default)
     {
         if (collections is null)
@@ -378,6 +398,9 @@ public partial class GalleryViewModel : ObservableObject
         var match = options.FirstOrDefault(option => option.Id == previousId) ?? CollectionOption.Default;
 
         suppressCollectionChanged = true;
+        // 先断开再选中：SelectedItem 为 OneWay 绑定，若新值与旧值同一实例，
+        // 不触发 PropertyChanged 会让 ComboBox 在列表重建后错过重选（显示空白）。
+        SelectedCollection = null;
         Collections.Clear();
         foreach (var option in options)
         {
@@ -386,6 +409,7 @@ public partial class GalleryViewModel : ObservableObject
 
         SelectedCollection = match;
         suppressCollectionChanged = false;
+        CollectionsReloaded?.Invoke();
 
         if (match.Id != previousId && Mode == GalleryMode.Favorites)
         {
@@ -394,6 +418,112 @@ public partial class GalleryViewModel : ObservableObject
             searchGeneration++;
             await ExecuteAsync(SearchText ?? string.Empty, searchGeneration, cancellationToken);
         }
+    }
+
+    /// <summary>设置当前合集；合集变化时回第 1 页重查（收藏视图内）。</summary>
+    private void SelectCollectionCore(CollectionOption option)
+    {
+        var changed = SelectedCollection?.Id != option.Id;
+        suppressCollectionChanged = true;
+        SelectedCollection = option;
+        suppressCollectionChanged = false;
+        if (changed && Mode == GalleryMode.Favorites)
+        {
+            ResetPaging();
+            searchGeneration++;
+            _ = ExecuteAsync(SearchText ?? string.Empty, searchGeneration);
+        }
+    }
+
+    private async Task<bool> HasCollectionNameAsync(
+        string trimmedName, int? excludeId, CancellationToken cancellationToken)
+    {
+        var rows = await collections!.GetAllAsync(cancellationToken);
+        return rows.Any(row => row.Id != excludeId
+            && string.Equals(row.Name, trimmedName, StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>新建收藏夹：空名/重名拒绝；成功后刷新列表并选中新收藏夹。</summary>
+    public async Task<(bool Success, string? Error)> CreateCollectionAsync(
+        string name, CancellationToken cancellationToken = default)
+    {
+        var trimmed = (name ?? string.Empty).Trim();
+        if (trimmed.Length == 0)
+        {
+            return (false, "收藏夹名称不能为空");
+        }
+
+        if (collections is null)
+        {
+            return (false, "收藏夹功能不可用");
+        }
+
+        if (await HasCollectionNameAsync(trimmed, null, cancellationToken))
+        {
+            return (false, $"已存在同名收藏夹「{trimmed}」");
+        }
+
+        var created = await collections.CreateAsync(trimmed, DateTimeOffset.UtcNow.ToUnixTimeSeconds(), cancellationToken);
+        await ReloadCollectionsAsync(cancellationToken);
+        SelectCollectionCore(new CollectionOption(created.Id, created.Name));
+        return (true, null);
+    }
+
+    /// <summary>重命名收藏夹：默认收藏不可重命名；空名/重名拒绝。</summary>
+    public async Task<(bool Success, string? Error)> RenameCollectionAsync(
+        int collectionId, string newName, CancellationToken cancellationToken = default)
+    {
+        if (collectionId == 0)
+        {
+            return (false, "默认收藏不可重命名");
+        }
+
+        var trimmed = (newName ?? string.Empty).Trim();
+        if (trimmed.Length == 0)
+        {
+            return (false, "收藏夹名称不能为空");
+        }
+
+        if (collections is null)
+        {
+            return (false, "收藏夹功能不可用");
+        }
+
+        if (await HasCollectionNameAsync(trimmed, collectionId, cancellationToken))
+        {
+            return (false, $"已存在同名收藏夹「{trimmed}」");
+        }
+
+        await collections.RenameAsync(collectionId, trimmed, DateTimeOffset.UtcNow.ToUnixTimeSeconds(), cancellationToken);
+        await ReloadCollectionsAsync(cancellationToken);
+        if (SelectedCollection?.Id == collectionId && Mode == GalleryMode.Favorites)
+        {
+            // 重命名的是当前合集：刷新 Chip 与摘要中的名称。
+            ResetPaging();
+            searchGeneration++;
+            _ = ExecuteAsync(SearchText ?? string.Empty, searchGeneration, cancellationToken);
+        }
+
+        return (true, null);
+    }
+
+    /// <summary>删除收藏夹：默认收藏不可删除；仅删除合集本身，产品与星标收藏不受影响。</summary>
+    public async Task<(bool Success, string? Error)> DeleteCollectionAsync(
+        int collectionId, CancellationToken cancellationToken = default)
+    {
+        if (collectionId == 0)
+        {
+            return (false, "默认收藏不可删除");
+        }
+
+        if (collections is null)
+        {
+            return (false, "收藏夹功能不可用");
+        }
+
+        await collections.DeleteAsync(collectionId, cancellationToken);
+        await ReloadCollectionsAsync(cancellationToken);
+        return (true, null);
     }
 
     private async Task ReloadCollectionsAndExecuteAsync(int generation)
@@ -817,7 +947,7 @@ public partial class GalleryViewModel : ObservableObject
     }
 
     /// <summary>当前选中的收藏夹名称（默认项为 null，走星标收藏语义）。</summary>
-    private string? CurrentCollectionName =>
+    public string? CurrentCollectionName =>
         Mode == GalleryMode.Favorites && SelectedCollection is { IsDefault: false } selected
             ? selected.Name
             : null;
@@ -830,10 +960,13 @@ public partial class GalleryViewModel : ObservableObject
             : query.Filter?.IsFavorite == true ? "收藏 · " : null;
         if (string.IsNullOrWhiteSpace(query.Keyword))
         {
-            return count == 0
-                ? (collectionName is not null ? $"收藏夹「{collectionName}」暂无产品"
-                    : query.Filter?.IsFavorite == true ? "暂无收藏产品" : null)
-                : $"{prefix}共 {count} 个产品";
+            if (count == 0 && (collectionName is not null || query.Filter?.IsFavorite == true))
+            {
+                // 收藏视图空状态由独立空状态面板表达，不再重复摘要。
+                return null;
+            }
+
+            return count == 0 ? null : $"{prefix}共 {count} 个产品";
         }
 
         return count == 0
@@ -938,7 +1071,7 @@ public partial class GalleryViewModel : ObservableObject
                     Cards.Add(card);
                 }
 
-                State = Cards.Count == 0 ? GalleryLoadState.Empty : GalleryLoadState.Ready;
+                State = Cards.Count == 0 && databaseIsEmpty ? GalleryLoadState.Empty : GalleryLoadState.Ready;
                 completion.SetResult();
             }
             catch (Exception exception)
@@ -1043,7 +1176,7 @@ public partial class GalleryViewModel : ObservableObject
                     Cards.Add(card);
                 }
 
-                State = Cards.Count == 0 ? GalleryLoadState.Empty : GalleryLoadState.Ready;
+                State = Cards.Count == 0 && databaseIsEmpty ? GalleryLoadState.Empty : GalleryLoadState.Ready;
                 completion.SetResult();
             }
             catch (Exception exception)

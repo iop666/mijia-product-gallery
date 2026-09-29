@@ -286,7 +286,8 @@ public sealed partial class MainWindow : Window
         }
     }
 
-    private void ShowGallery(bool favorites = false, bool recent = false)
+    /// <summary>显示全部产品图库（供收藏空状态"浏览图库"等入口调用）。</summary>
+    public void ShowGallery(bool favorites = false, bool recent = false)
     {
         galleryViewModel ??= App.Services.GetRequiredService<GalleryViewModel>();
         if (!galleryWired)

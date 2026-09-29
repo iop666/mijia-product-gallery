@@ -170,7 +170,7 @@ public sealed class GalleryPagingViewModelTests : IAsyncLifetime
         vm.GoToLastPage();
         await WaitForAsync(() => vm.CurrentPage == 3);
         vm.ApplySearchImmediate("不存在xyz");
-        await WaitForAsync(() => vm.TotalCount == 0 && vm.State == GalleryLoadState.Empty);
+        await WaitForAsync(() => vm.TotalCount == 0 && vm.State == GalleryLoadState.Ready);
         Assert.Equal(1, vm.CurrentPage);
         Assert.False(vm.IsPagerVisible);
     }

@@ -1,0 +1,132 @@
+<?xml version="1.0" encoding="utf-8"?>
+<UserControl
+    x:Class="MijiaProductGallery.App.Views.CollectionManagerView"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:local="using:MijiaProductGallery.App.Views"
+    xmlns:conv="using:MijiaProductGallery.App.Converters"
+    MinWidth="380">
+
+    <Grid RowSpacing="12" Margin="4,4,4,0">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <!-- 收藏夹列表：单选，Fluent 选中态；默认收藏带星标 -->
+        <ListView
+            Grid.Row="0"
+            x:Name="List"
+            MinHeight="132"
+            MaxHeight="220"
+            SelectionMode="Single"
+            AutomationProperties.Name="收藏夹列表"
+            ItemsSource="{x:Bind Rows, Mode=OneWay}"
+            SelectionChanged="OnListSelectionChanged">
+            <ListView.ItemTemplate>
+                <DataTemplate x:DataType="local:CollectionRow">
+                    <Grid
+                        ColumnSpacing="10"
+                        Height="32"
+                        AutomationProperties.Name="{x:Bind Name}">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <FontIcon
+                            Grid.Column="0"
+                            FontSize="15"
+                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                            Glyph="&#xE735;"
+                            Visibility="{x:Bind conv:UiConverters.ToVisibility(IsDefault), Mode=OneWay}" />
+                        <FontIcon
+                            Grid.Column="0"
+                            FontSize="15"
+                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                            Glyph="&#xE8B7;"
+                            Visibility="{x:Bind conv:UiConverters.ToVisibility(IsNormal), Mode=OneWay}" />
+                        <TextBlock
+                            Grid.Column="1"
+                            Text="{x:Bind Path=Name, Mode=OneWay}"
+                            VerticalAlignment="Center"
+                            TextTrimming="CharacterEllipsis" />
+                    </Grid>
+                </DataTemplate>
+            </ListView.ItemTemplate>
+        </ListView>
+
+        <!-- 错误提示（空名/重名） -->
+        <TextBlock
+            Grid.Row="1"
+            x:Name="ErrorText"
+            FontSize="12"
+            Foreground="{ThemeResource SystemFillColorCriticalBrush}"
+            TextWrapping="Wrap"
+            Visibility="Collapsed" />
+
+        <!-- 选中收藏夹的操作 -->
+        <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8">
+            <Button
+                x:Name="RenameButton"
+                Content="重命名"
+                Click="OnRenameClick"
+                ToolTipService.ToolTip="重命名选中的收藏夹" />
+            <Button
+                x:Name="DeleteButton"
+                Content="删除"
+                Click="OnDeleteClick"
+                ToolTipService.ToolTip="删除选中的收藏夹（不影响其中产品）" />
+        </StackPanel>
+
+        <!-- 新建 / 输入区 -->
+        <Grid Grid.Row="3" RowSpacing="6" Margin="0,2,0,0">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+            <Grid Grid.Row="0">
+                <Button
+                    x:Name="CreateButton"
+                    HorizontalAlignment="Left"
+                    AutomationProperties.Name="新建收藏夹"
+                    Click="OnCreateStartClick">
+                    <StackPanel Orientation="Horizontal" Spacing="6">
+                        <FontIcon Glyph="&#xE710;" FontSize="14" />
+                        <TextBlock Text="新建收藏夹" />
+                    </StackPanel>
+                </Button>
+                <StackPanel
+                    x:Name="InputPanel"
+                    Orientation="Horizontal"
+                    Spacing="8"
+                    Visibility="Collapsed">
+                    <TextBox
+                        x:Name="InputBox"
+                        MinWidth="216"
+                        MaxLength="40"
+                        PlaceholderText="收藏夹名称"
+                        AutomationProperties.Name="收藏夹名称输入"
+                        KeyDown="OnInputBoxKeyDown" />
+                    <Button
+                        x:Name="InputConfirmButton"
+                        Style="{StaticResource AccentButtonStyle}"
+                        Click="OnInputConfirmClick">
+                        <x:String>创建</x:String>
+                    </Button>
+                    <Button
+                        Content="取消"
+                        AutomationProperties.Name="取消输入"
+                        Click="OnInputCancelClick" />
+                </StackPanel>
+            </Grid>
+            <TextBlock
+                Grid.Row="1"
+                x:Name="InputHint"
+                FontSize="11"
+                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                Visibility="Collapsed" />
+        </Grid>
+    </Grid>
+</UserControl>

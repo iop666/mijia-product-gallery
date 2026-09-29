@@ -32,6 +32,15 @@ public sealed partial class ProductCardControl : UserControl
     /// <summary>动作成功提示（需要 UI 提示信息状态）。</summary>
     public event EventHandler<string>? ActionInfo;
 
+    /// <summary>右键菜单即将打开（宿主可按当前视图调整菜单项）。</summary>
+    public event EventHandler<ProductCard?>? MenuOpening;
+
+    /// <summary>请求从当前视图移除（取消收藏 / 从当前收藏夹移除，由宿主区分）。</summary>
+    public event EventHandler<ProductCard>? QuickRemoveRequested;
+
+    /// <summary>请求新建收藏夹并加入该产品。</summary>
+    public event EventHandler<ProductCard>? CreateCollectionRequested;
+
     /// <summary>尝试拖拽无图型号（需要 UI 提示不可拖拽状态）。</summary>
     public event EventHandler<ProductCard>? NotDraggableRequested;
 
@@ -80,7 +89,7 @@ public sealed partial class ProductCardControl : UserControl
         }
     }
 
-    /// <summary>右键菜单不在根元素子树内，打开时显式对齐当前主题；"添加到收藏夹"按当前数据重建。</summary>
+    /// <summary>右键菜单不在根元素子树内，打开时显式对齐当前主题；"加入收藏"按当前数据重建。</summary>
     private void OnMenuFlyoutOpening(object? sender, object e)
     {
         if (sender is Microsoft.UI.Xaml.Controls.Primitives.FlyoutBase flyout)
@@ -88,23 +97,39 @@ public sealed partial class ProductCardControl : UserControl
             ThemeManager.ApplyToFlyout(flyout);
         }
 
-        PopulateCollectionMenu();
-    }
-
-    /// <summary>重建"添加到收藏夹"子菜单（异步取列表；已加入项禁用标记）。</summary>
-    private void PopulateCollectionMenu()
-    {
-        MenuAddToCollection.Items.Clear();
+        MenuFavorite.Items.Clear();
+        MenuOpening?.Invoke(this, Card);
         if (Card is null)
         {
             return;
         }
 
-        _ = PopulateCollectionMenuCoreAsync(Card.ProductId);
+        _ = PopulateFavoriteMenuCoreAsync(Card);
     }
 
-    private async Task PopulateCollectionMenuCoreAsync(int productId)
+    /// <summary>勾选式"加入收藏"子菜单：默认收藏 + 各合集（勾选=已加入）+ 新建收藏夹…。</summary>
+    private async Task PopulateFavoriteMenuCoreAsync(ProductCard card)
     {
+        var defaultItem = new ToggleMenuFlyoutItem
+        {
+            Text = "默认收藏（星标）",
+            IsChecked = card.IsFavorite,
+        };
+        defaultItem.Click += async (_, _) =>
+        {
+            try
+            {
+                card.IsFavorite = await Favorites.ToggleAsync(card.ProductId);
+                defaultItem.IsChecked = card.IsFavorite;
+            }
+            catch (Exception exception) when (exception is UnauthorizedAccessException or InvalidOperationException or COMException)
+            {
+                defaultItem.IsChecked = card.IsFavorite;
+                ActionFailed?.Invoke(this, $"收藏切换失败：{exception.Message}");
+            }
+        };
+        MenuFavorite.Items.Add(defaultItem);
+
         List<Collection> rows;
         try
         {
@@ -112,48 +137,87 @@ public sealed partial class ProductCardControl : UserControl
         }
         catch (Exception exception) when (exception is UnauthorizedAccessException or InvalidOperationException or COMException)
         {
-            return;
-        }
-
-        if (rows.Count == 0)
-        {
-            MenuAddToCollection.Items.Add(new MenuFlyoutItem
-            {
-                Text = "暂无收藏夹（收藏视图可管理）",
-                IsEnabled = false,
-            });
-            return;
+            rows = [];
         }
 
         foreach (var row in rows)
         {
-            var joined = (await Collections.GetProductIdsAsync(row.Id)).Contains(productId);
-            var item = new MenuFlyoutItem
+            var joined = (await Collections.GetProductIdsAsync(row.Id)).Contains(card.ProductId);
+            var item = new ToggleMenuFlyoutItem
             {
-                Text = joined ? $"{row.Name}（已加入）" : row.Name,
-                IsEnabled = !joined,
+                Text = row.Name,
+                IsChecked = joined,
             };
             var collectionId = row.Id;
-            item.Click += (_, _) => _ = AddToCollectionAsync(collectionId, row.Name);
-            MenuAddToCollection.Items.Add(item);
+            item.Click += async (_, _) =>
+            {
+                try
+                {
+                    if (item.IsChecked)
+                    {
+                        await Collections.AddItemAsync(collectionId, card.ProductId, DateTimeOffset.UtcNow.ToUnixTimeSeconds());
+                        ActionInfo?.Invoke(this, $"已加入收藏夹「{row.Name}」");
+                    }
+                    else
+                    {
+                        await Collections.RemoveItemAsync(collectionId, card.ProductId);
+                        ActionInfo?.Invoke(this, $"已从收藏夹「{row.Name}」移除");
+                    }
+                }
+                catch (Exception exception) when (exception is UnauthorizedAccessException or InvalidOperationException or COMException)
+                {
+                    item.IsChecked = joined;
+                    ActionFailed?.Invoke(this, $"收藏夹操作失败：{exception.Message}");
+                }
+            };
+            MenuFavorite.Items.Add(item);
         }
+
+        if (rows.Count > 0)
+        {
+            MenuFavorite.Items.Add(new MenuFlyoutSeparator());
+        }
+
+        var create = new MenuFlyoutItem { Text = "新建收藏夹…" };
+        create.Click += (_, _) => CreateCollectionRequested?.Invoke(this, card);
+        MenuFavorite.Items.Add(create);
     }
 
-    private async Task AddToCollectionAsync(int collectionId, string name)
+    /// <summary>宿主页按当前视图设置快速移除项（取消收藏 / 从当前收藏夹移除；null 隐藏）。
+    /// Opening 期间改 Visibility 不可靠，这里动态插入/移除菜单项。</summary>
+    private MenuFlyoutItem? quickRemoveItem;
+
+    public void SetQuickRemove(string? label)
     {
-        if (Card is null)
+        if (string.IsNullOrEmpty(label))
         {
+            if (quickRemoveItem is not null)
+            {
+                CardContextMenu.Items.Remove(quickRemoveItem);
+                quickRemoveItem = null;
+            }
+
             return;
         }
 
-        try
+        if (quickRemoveItem is null)
         {
-            await Collections.AddItemAsync(collectionId, Card.ProductId, DateTimeOffset.UtcNow.ToUnixTimeSeconds());
-            ActionInfo?.Invoke(this, $"已添加到收藏夹「{name}」");
+            quickRemoveItem = new MenuFlyoutItem
+            {
+                Icon = new FontIcon { Glyph = "\uE74D" },
+            };
+            quickRemoveItem.Click += OnMenuQuickRemoveClick;
+            CardContextMenu.Items.Add(quickRemoveItem);
         }
-        catch (Exception exception) when (exception is UnauthorizedAccessException or InvalidOperationException or COMException)
+
+        quickRemoveItem.Text = label;
+    }
+
+    private void OnMenuQuickRemoveClick(object sender, RoutedEventArgs e)
+    {
+        if (Card is not null)
         {
-            ActionFailed?.Invoke(this, $"添加到收藏夹失败：{exception.Message}");
+            QuickRemoveRequested?.Invoke(this, Card);
         }
     }
 
@@ -208,8 +272,6 @@ public sealed partial class ProductCardControl : UserControl
     {
         var hasImage = Card?.HasImage ?? false;
         MenuCopyImage.IsEnabled = hasImage;
-        // 星形图标已在 XAML 中固定，文字不带星号前缀（避免与图标重复）。
-        MenuFavorite.Text = Card?.IsFavorite == true ? "取消收藏" : "加入收藏";
     }
 
     private void OnPointerPressed(object sender, PointerRoutedEventArgs e)
@@ -406,23 +468,5 @@ public sealed partial class ProductCardControl : UserControl
     private void OnMenuCopyFullInfoClick(object sender, RoutedEventArgs e)
     {
         CopyText(CardTextKind.FullInfo);
-    }
-
-    private async void OnMenuFavoriteClick(object sender, RoutedEventArgs e)
-    {
-        if (Card is null)
-        {
-            return;
-        }
-
-        try
-        {
-            Card.IsFavorite = await Favorites.ToggleAsync(Card.ProductId);
-            UpdateMenuStates();
-        }
-        catch (Exception exception) when (exception is UnauthorizedAccessException or InvalidOperationException or COMException)
-        {
-            ActionFailed?.Invoke(this, $"收藏切换失败：{exception.Message}");
-        }
     }
 }

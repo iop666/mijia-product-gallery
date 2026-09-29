@@ -158,8 +158,9 @@ public sealed class GallerySearchViewModelTests : IAsyncLifetime
         vm.ApplySearchImmediate("zzz-no-match");
 
         Assert.True(await WaitForAsync(() => vm.ResultSummary == "没有找到相关产品"));
-        Assert.Equal(GalleryLoadState.Empty, vm.State);
-        Assert.True(vm.IsEmptyVisible);
+        // 查询无结果不再等于"图库为空"：Empty 仅表示数据库无产品。
+        Assert.Equal(GalleryLoadState.Ready, vm.State);
+        Assert.False(vm.IsEmptyVisible);
     }
 
     [Fact]

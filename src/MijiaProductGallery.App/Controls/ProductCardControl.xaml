@@ -148,16 +148,11 @@
                             </MenuFlyoutItem.Icon>
                         </MenuFlyoutItem>
                     </MenuFlyoutSubItem>
-                    <MenuFlyoutSubItem x:Name="MenuAddToCollection" Text="添加到收藏夹">
+                    <MenuFlyoutSubItem x:Name="MenuFavorite" Text="加入收藏">
                         <MenuFlyoutSubItem.Icon>
-                            <FontIcon Glyph="&#xE8B7;" />
+                            <FontIcon Glyph="&#xE734;" />
                         </MenuFlyoutSubItem.Icon>
                     </MenuFlyoutSubItem>
-                    <MenuFlyoutItem x:Name="MenuFavorite" Click="OnMenuFavoriteClick">
-                        <MenuFlyoutItem.Icon>
-                            <FontIcon Glyph="&#xE734;" />
-                        </MenuFlyoutItem.Icon>
-                    </MenuFlyoutItem>
                 </MenuFlyout>
             </Border.ContextFlyout>
         </Border>

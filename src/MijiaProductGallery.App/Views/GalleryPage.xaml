@@ -44,6 +44,22 @@
                     Orientation="Horizontal"
                     Spacing="8"
                     VerticalAlignment="Center">
+                    <ComboBox
+                        x:Name="CollectionBox"
+                        MinWidth="190"
+                        MaxDropDownHeight="320"
+                        ItemsSource="{Binding Collections, Mode=OneWay}"
+                        SelectedItem="{Binding SelectedCollection, Mode=OneWay}"
+                        DisplayMemberPath="Name"
+                        SelectionChanged="OnCollectionBoxSelectionChanged"
+                        AutomationProperties.Name="收藏夹选择"
+                        ToolTipService.ToolTip="选择要查看的收藏夹"
+                        Visibility="{Binding IsFavoritesMode, Mode=OneWay, Converter={StaticResource BoolToVisibility}}" />
+                    <Button
+                        Content="管理收藏夹"
+                        Click="OnManageCollectionsClick"
+                        AutomationProperties.Name="管理收藏夹"
+                        Visibility="{Binding IsFavoritesMode, Mode=OneWay, Converter={StaticResource BoolToVisibility}}" />
                     <TextBlock
                         Text="{Binding ResultSummary, Mode=OneWay}"
                         FontSize="13"
@@ -52,18 +68,6 @@
                         TextTrimming="CharacterEllipsis"
                         Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                         Visibility="{Binding HasResultSummary, Mode=OneWay, Converter={StaticResource BoolToVisibility}}" />
-                    <ComboBox
-                        x:Name="CollectionBox"
-                        MinWidth="150"
-                        ItemsSource="{Binding Collections, Mode=OneWay}"
-                        SelectedItem="{Binding SelectedCollection, Mode=TwoWay}"
-                        DisplayMemberPath="Name"
-                        ToolTipService.ToolTip="选择要查看的收藏夹（默认项为星标收藏）"
-                        Visibility="{Binding IsFavoritesMode, Mode=OneWay, Converter={StaticResource BoolToVisibility}}" />
-                    <Button
-                        Content="管理收藏夹"
-                        Click="OnManageCollectionsClick"
-                        Visibility="{Binding IsFavoritesMode, Mode=OneWay, Converter={StaticResource BoolToVisibility}}" />
                 </StackPanel>
                 <Button
                     Grid.Column="1"
@@ -261,6 +265,30 @@
                     </ItemsRepeater.Layout>
                 </ItemsRepeater>
             </ScrollViewer>
+
+            <!-- 收藏视图空状态：当前收藏夹还没有产品 -->
+            <StackPanel
+                Grid.Row="3"
+                HorizontalAlignment="Center"
+                VerticalAlignment="Center"
+                Spacing="12"
+                Visibility="{x:Bind local:UiConverters.ToVisibility(Vm.IsFavoritesEmptyVisible), Mode=OneWay}">
+                <FontIcon
+                    Glyph="&#xE735;"
+                    FontSize="40"
+                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                    HorizontalAlignment="Center" />
+                <TextBlock
+                    Text="{x:Bind Vm.FavoritesEmptyText, Mode=OneWay}"
+                    FontSize="16"
+                    HorizontalAlignment="Center" />
+                <Button
+                    Content="浏览图库"
+                    Style="{StaticResource AccentButtonStyle}"
+                    HorizontalAlignment="Center"
+                    AutomationProperties.Name="浏览图库"
+                    Click="OnBrowseGalleryClick" />
+            </StackPanel>
         </Grid>
 
         <!-- 加载中 -->
