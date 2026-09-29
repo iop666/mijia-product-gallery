@@ -12,13 +12,14 @@ publish/
 *.swp
 
 # Runtime data (app default root is %LOCALAPPDATA%\MijiaProductGallery,
-# but keep dev-machine local data out of git regardless of location)
-Data/
-database/
-images/
-thumbnails/
-backups/
-logs/
+# but keep dev-machine local data out of git regardless of location).
+# 根锚定（仅仓库根目录），避免误伤 src 下的同名源码目录（Database/Images 等）。
+/Data/
+/database/
+/images/
+/thumbnails/
+/backups/
+/logs/
 *.db
 *.db-shm
 *.db-wal
