@@ -40,6 +40,11 @@ public partial class App : Application
 
     public App()
     {
+        // 历史数据根（%LOCALAPPDATA%）一次性迁移到应用目录\Data；
+        // 必须先于任何数据库访问（含持久化主题读取）执行。
+        MijiaProductGallery.Infrastructure.Database.DataRootMigrator.Migrate(
+            new MijiaProductGallery.Infrastructure.Database.DatabasePaths().Root);
+
         // 主题为应用级资源，只能在构造函数（XAML 资源加载前）设置；运行时切换经重启应用完成。
         initialTheme = ReadPersistedTheme();
         InitialTheme = initialTheme;
@@ -61,9 +66,7 @@ public partial class App : Application
     {
         try
         {
-            var dbFile = Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                "MijiaProductGallery", "database", "gallery.db");
+            var dbFile = new MijiaProductGallery.Infrastructure.Database.DatabasePaths().DatabaseFile;
             if (!File.Exists(dbFile))
             {
                 return AppSettingsKeys.ThemeDefault;
@@ -99,6 +102,7 @@ public partial class App : Application
         var dispatcherQueue = DispatcherQueue.GetForCurrentThread();
         var services = new ServiceCollection();
         services.AddInfrastructure();
+        services.AddSingleton<Core.Interfaces.IAppDataRoot>(new MijiaProductGallery.Infrastructure.Database.DatabasePaths());
         services.AddSingleton<IUiDispatcher>(new UiDispatcher(dispatcherQueue));
         services.AddSingleton<ThumbnailLoadQueue>();
         services.AddSingleton<GalleryViewModel>();
@@ -130,9 +134,7 @@ public partial class App : Application
     {
         try
         {
-            var logs = Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                "MijiaProductGallery", "logs");
+            var logs = new MijiaProductGallery.Infrastructure.Database.DatabasePaths().LogsDirectory;
             Directory.CreateDirectory(logs);
             File.AppendAllText(
                 Path.Combine(logs, "unhandled.log"),

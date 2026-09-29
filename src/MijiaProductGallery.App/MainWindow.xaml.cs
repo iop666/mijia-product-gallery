@@ -273,9 +273,7 @@ public sealed partial class MainWindow : Window
     {
         try
         {
-            var dir = Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                "MijiaProductGallery", "logs");
+            var dir = new MijiaProductGallery.Infrastructure.Database.DatabasePaths().LogsDirectory;
             Directory.CreateDirectory(dir);
             File.AppendAllText(
                 Path.Combine(dir, "theme-error.log"),
