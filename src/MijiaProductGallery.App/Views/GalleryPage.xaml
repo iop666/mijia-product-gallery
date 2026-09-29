@@ -89,6 +89,7 @@
                     </Button.Flyout>
                 </Button>
                 <Button
+                    x:Name="FilterButton"
                     Grid.Column="3"
                     Click="OnFilterToggleClick"
                     ToolTipService.ToolTip="打开/关闭筛选面板">
@@ -142,6 +143,7 @@
                                     Background="Transparent"
                                     BorderThickness="0"
                                     Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                    AutomationProperties.Name="移除筛选条件"
                                     ToolTipService.ToolTip="移除该条件"
                                     Tag="{Binding Id}"
                                     Click="OnChipRemoveClick" />
@@ -252,6 +254,7 @@
         <InfoBar
             Grid.Column="0"
             x:Name="NoticeBar"
+            AutomationProperties.LiveSetting="Polite"
             IsOpen="False"
             IsClosable="True"
             Severity="Informational"
@@ -265,6 +268,8 @@
             Grid.Column="1"
             x:Name="FilterPaneBorder"
             Width="260"
+            IsTabStop="True"
+            UseSystemFocusVisuals="False"
             BorderThickness="1,0,0,0"
             BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
             Background="{ThemeResource LayerFillColorDefaultBrush}"

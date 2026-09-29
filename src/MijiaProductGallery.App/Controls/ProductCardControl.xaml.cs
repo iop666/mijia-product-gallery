@@ -63,9 +63,7 @@ public sealed partial class ProductCardControl : UserControl
         {
             card = value;
             DataContext = value;
-            // UI Automation 语义：读屏与键盘用户可识别卡片指向的产品。
-            Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(
-                RootGrid, value is null ? string.Empty : $"{value.Name}（{value.Model}）");
+            UpdateAutomationSemantics();
             UpdateMenuStates();
             RequestThumbnail();
         }
@@ -80,7 +78,15 @@ public sealed partial class ProductCardControl : UserControl
         }
     }
 
-    /// <summary>键盘操作：Enter/Space 打开详情（与左键单击一致）。</summary>
+    /// <summary>卡片无障碍语义：名称（名称+型号）+ 类型（产品卡片）。</summary>
+    private void UpdateAutomationSemantics()
+    {
+        Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(
+            RootGrid, card is null ? string.Empty : $"{card.Name}（{card.Model}）");
+        Microsoft.UI.Xaml.Automation.AutomationProperties.SetItemType(RootGrid, "产品卡片");
+    }
+
+    /// <summary>键盘操作：Enter/Space 打开详情；菜单键/Shift+F10 打开右键菜单（与右键一致）。</summary>
     private void OnRootKeyDown(object sender, Microsoft.UI.Xaml.Input.KeyRoutedEventArgs e)
     {
         if (Card is null)
@@ -92,6 +98,22 @@ public sealed partial class ProductCardControl : UserControl
         {
             e.Handled = true;
             DetailRequested?.Invoke(this, Card);
+            return;
+        }
+
+        // 菜单键或 Shift+F10：键盘打开右键菜单（若框架已打开则不重复）。
+        var isMenuKey = e.Key == Windows.System.VirtualKey.Menu;
+        var isShiftF10 = e.Key == Windows.System.VirtualKey.F10
+            && Microsoft.UI.Input.InputKeyboardSource
+                .GetKeyStateForCurrentThread(Windows.System.VirtualKey.Shift)
+                .HasFlag(Windows.UI.Core.CoreVirtualKeyStates.Down);
+        if ((isMenuKey || isShiftF10) && !CardContextMenu.IsOpen)
+        {
+            e.Handled = true;
+            CardContextMenu.ShowAt(RootGrid, new Microsoft.UI.Xaml.Controls.Primitives.FlyoutShowOptions
+            {
+                Position = new Windows.Foundation.Point(20, 20),
+            });
         }
     }
 
@@ -151,6 +173,8 @@ public sealed partial class ProductCardControl : UserControl
     /// </summary>
     private async void OnRootDragStarting(UIElement sender, DragStartingEventArgs args)
     {
+        // 拖拽进行中的源卡片高亮（释放后由 DropCompleted 恢复）。
+        VisualStateManager.GoToState(this, "DragCue", useTransitions: false);
         var deferral = args.GetDeferral();
         try
         {
@@ -195,6 +219,7 @@ public sealed partial class ProductCardControl : UserControl
 
     private void OnRootDropCompleted(UIElement sender, DropCompletedEventArgs args)
     {
+        VisualStateManager.GoToState(this, "Normal", useTransitions: false);
         if (args.DropResult.HasFlag(DataPackageOperation.Copy) && Card is not null)
         {
             DragCompleted?.Invoke(this, Card);

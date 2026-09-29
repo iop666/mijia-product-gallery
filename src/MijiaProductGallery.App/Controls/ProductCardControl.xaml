@@ -116,7 +116,7 @@
             </Grid>
 
             <Border.ContextFlyout>
-                <MenuFlyout Opening="OnMenuFlyoutOpening">
+                <MenuFlyout x:Name="CardContextMenu" Opening="OnMenuFlyoutOpening">
                     <MenuFlyoutSubItem Text="复制">
                         <MenuFlyoutItem x:Name="MenuCopyImage" Text="复制图片" Click="OnMenuCopyImageClick">
                             <MenuFlyoutItem.Icon>

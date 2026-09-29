@@ -152,6 +152,12 @@ public sealed partial class GalleryPage : Page
         NoticeBar.Title = severity == InfoBarSeverity.Error ? "操作失败" : "提示";
         NoticeBar.Message = message;
         NoticeBar.IsOpen = true;
+        if (severity == InfoBarSeverity.Error)
+        {
+            // 错误常驻，由用户关闭，避免错过关键信息。
+            return;
+        }
+
         var timer = DispatcherQueue.CreateTimer();
         timer.Interval = TimeSpan.FromSeconds(4);
         timer.IsRepeating = false;
@@ -222,6 +228,33 @@ public sealed partial class GalleryPage : Page
 
         SyncFilterCombos();
         vm.FilterPane.IsOpen = !vm.FilterPane.IsOpen;
+        if (vm.FilterPane.IsOpen)
+        {
+            // 打开后焦点移入面板，Tab 顺序从面板内开始；淡入过渡。
+            FilterPaneBorder.Opacity = 0;
+            FilterPaneBorder.Focus(Microsoft.UI.Xaml.FocusState.Programmatic);
+            PlayPaneFadeIn();
+        }
+        else
+        {
+            FilterButton.Focus(Microsoft.UI.Xaml.FocusState.Programmatic);
+        }
+    }
+
+    /// <summary>筛选面板原生淡入（150ms，一次性，不阻塞交互）。</summary>
+    private void PlayPaneFadeIn()
+    {
+        var storyboard = new Microsoft.UI.Xaml.Media.Animation.Storyboard();
+        var animation = new Microsoft.UI.Xaml.Media.Animation.DoubleAnimation
+        {
+            From = 0,
+            To = 1,
+            Duration = new Microsoft.UI.Xaml.Duration(TimeSpan.FromMilliseconds(150)),
+        };
+        Microsoft.UI.Xaml.Media.Animation.Storyboard.SetTarget(animation, FilterPaneBorder);
+        Microsoft.UI.Xaml.Media.Animation.Storyboard.SetTargetProperty(animation, "Opacity");
+        storyboard.Children.Add(animation);
+        storyboard.Begin();
     }
 
     private void OnClearFiltersClick(object sender, RoutedEventArgs e)
