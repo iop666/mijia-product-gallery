@@ -26,7 +26,8 @@ public static class ThemePalette
             resources.MergedDictionaries.Add(registered);
         }
 
-        // 灰色模式与深色共用 Dark 主题字典，按当前选择重写其取值。
+        // 深色与灰色的差异都体现在 Dark 主题字典：
+        // 深色→灰色（元素主题不变、无主题变更信号）由主窗口借浅色过渡强制重解析。
         var darkValues = theme == "Gray" ? ThemePaletteDefinition.For("Gray") : ThemePaletteDefinition.For("Dark");
         var dark = (ResourceDictionary)registered.ThemeDictionaries["Dark"];
         dark.Clear();

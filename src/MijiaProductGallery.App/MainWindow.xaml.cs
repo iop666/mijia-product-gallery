@@ -170,18 +170,32 @@ public sealed partial class MainWindow : Window
     }
 
     /// <summary>主题实时切换：窗口实例保持不变，当前页面与主要 UI 状态全部保留。
-    /// 元素级资源随根元素 RequestedTheme 翻转，窗口/图层背景经画笔覆盖表更新；
+    /// 深色↔灰色元素主题相同、无变更信号，借一次浅色过渡强制全树主题资源重解析；
     /// 弹窗/对话框在打开时经 ThemeManager 对齐主题。</summary>
     private void OnThemeChanged(string theme)
     {
-        DispatcherQueue.TryEnqueue(() =>
+        DispatcherQueue.TryEnqueue(() => _ = ApplyThemeLiveAsync(theme));
+    }
+
+    private async Task ApplyThemeLiveAsync(string theme)
+    {
+        var target = ThemeManager.ToElementTheme(theme);
+        if (Nav.RequestedTheme == target)
         {
-            Nav.RequestedTheme = ThemeManager.ToElementTheme(theme);
+            // 深色↔灰色：先离开当前主题，重写覆盖字典后再回来，强制重新解析。
+            Nav.RequestedTheme = target == ElementTheme.Dark ? ElementTheme.Light : ElementTheme.Dark;
             ThemePalette.Apply(theme);
-            ApplyTitleBarTheme(theme);
-            SearchBox.RequestedTheme = ThemeManager.ToElementTheme(theme);
-            ThemeManager.CurrentTheme = theme;
-        });
+            await Task.Delay(60);
+        }
+        else
+        {
+            ThemePalette.Apply(theme);
+        }
+
+        Nav.RequestedTheme = target;
+        ApplyTitleBarTheme(theme);
+        SearchBox.RequestedTheme = target;
+        ThemeManager.CurrentTheme = theme;
     }
 
     private void ShowGallery(bool favorites = false, bool recent = false)
