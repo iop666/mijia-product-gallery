@@ -71,6 +71,15 @@ public sealed partial class ProductCardControl : UserControl
         }
     }
 
+    /// <summary>右键菜单不在根元素子树内，打开时显式对齐当前主题。</summary>
+    private void OnMenuFlyoutOpening(object? sender, object e)
+    {
+        if (sender is Microsoft.UI.Xaml.Controls.Primitives.FlyoutBase flyout)
+        {
+            ThemeManager.ApplyToFlyout(flyout);
+        }
+    }
+
     /// <summary>键盘操作：Enter/Space 打开详情（与左键单击一致）。</summary>
     private void OnRootKeyDown(object sender, Microsoft.UI.Xaml.Input.KeyRoutedEventArgs e)
     {

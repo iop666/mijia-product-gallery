@@ -12,7 +12,7 @@
                 <TextBlock Text="常规" FontSize="18" FontWeight="SemiBold" />
                 <StackPanel Spacing="6">
                     <TextBlock Text="主题" FontSize="13" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-                    <ComboBox x:Name="ThemeBox" MinWidth="160" SelectionChanged="OnThemeSelectionChanged">
+                    <ComboBox x:Name="ThemeBox" MinWidth="160" DropDownOpened="OnComboOpening" SelectionChanged="OnThemeSelectionChanged">
                         <ComboBoxItem Content="跟随系统" />
                         <ComboBoxItem Content="浅色" />
                         <ComboBoxItem Content="深色" />
@@ -21,7 +21,7 @@
                 </StackPanel>
                 <StackPanel Spacing="6">
                     <TextBlock Text="启动视图" FontSize="13" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-                    <ComboBox x:Name="LaunchViewBox" MinWidth="160" SelectionChanged="OnLaunchViewSelectionChanged">
+                    <ComboBox x:Name="LaunchViewBox" MinWidth="160" DropDownOpened="OnComboOpening" SelectionChanged="OnLaunchViewSelectionChanged">
                         <ComboBoxItem Content="图库" />
                         <ComboBoxItem Content="收藏视图" />
                         <ComboBoxItem Content="最近使用" />
@@ -91,7 +91,7 @@
                 <TextBlock Text="同步" FontSize="18" FontWeight="SemiBold" />
                 <StackPanel Spacing="6">
                     <TextBlock Text="自动同步频率（详细状态请前往同步中心）" FontSize="13" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-                    <ComboBox x:Name="SyncIntervalBox" MinWidth="160" SelectionChanged="OnSyncIntervalSelectionChanged">
+                    <ComboBox x:Name="SyncIntervalBox" DropDownOpened="OnComboOpening" MinWidth="160" SelectionChanged="OnSyncIntervalSelectionChanged">
                         <ComboBoxItem Content="关闭" />
                         <ComboBoxItem Content="每次启动" />
                         <ComboBoxItem Content="每 6 小时" />

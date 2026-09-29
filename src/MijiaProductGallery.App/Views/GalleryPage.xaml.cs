@@ -102,6 +102,7 @@ public sealed partial class GalleryPage : Page
         var dialog = new ContentDialog
         {
             XamlRoot = XamlRoot,
+            RequestedTheme = ThemeManager.ToElementTheme(ThemeManager.CurrentTheme),
             Title = "产品详情（占位）",
             CloseButtonText = "关闭",
             Content = new StackPanel
@@ -283,6 +284,23 @@ public sealed partial class GalleryPage : Page
         if (sender is Microsoft.UI.Xaml.Controls.Button { Tag: string chipId })
         {
             vm?.RemoveChip(chipId);
+        }
+    }
+
+    /// <summary>弹窗不在根元素子树内，打开时显式对齐当前主题。</summary>
+    private void OnFlyoutOpening(object? sender, object e)
+    {
+        if (sender is Microsoft.UI.Xaml.Controls.Primitives.FlyoutBase flyout)
+        {
+            ThemeManager.ApplyToFlyout(flyout);
+        }
+    }
+
+    private void OnComboOpening(object? sender, object e)
+    {
+        if (sender is ComboBox combo)
+        {
+            combo.RequestedTheme = ThemeManager.ToElementTheme(ThemeManager.CurrentTheme);
         }
     }
 

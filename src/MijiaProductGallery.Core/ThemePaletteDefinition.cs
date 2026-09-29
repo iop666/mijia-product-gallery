@@ -37,14 +37,14 @@ public static class ThemePaletteDefinition
             },
             "Gray" => new Dictionary<string, uint>
             {
-                ["ApplicationPageBackgroundThemeBrush"] = 0xFF2D2D2D,
-                ["SolidBackgroundFillColorBase"] = 0xFF2D2D2D,
-                ["SolidBackgroundFillColorSecondary"] = 0xFF323232,
-                ["SolidBackgroundFillColorTertiary"] = 0xFF383838,
-                ["LayerFillColorDefault"] = 0xFF303030,
-                ["LayerFillColorSecondary"] = 0xFF2A2A2A,
-                ["NavigationViewContentBackground"] = 0xFF2D2D2D,
-                ["NavigationViewExpandedPaneBackground"] = 0xFF333333,
+                ["ApplicationPageBackgroundThemeBrush"] = 0xFF3B3B3B,
+                ["SolidBackgroundFillColorBase"] = 0xFF3B3B3B,
+                ["SolidBackgroundFillColorSecondary"] = 0xFF414141,
+                ["SolidBackgroundFillColorTertiary"] = 0xFF474747,
+                ["LayerFillColorDefault"] = 0xFF3F3F3F,
+                ["LayerFillColorSecondary"] = 0xFF3A3A3A,
+                ["NavigationViewContentBackground"] = 0xFF3B3B3B,
+                ["NavigationViewExpandedPaneBackground"] = 0xFF424242,
             },
             "Light" => new Dictionary<string, uint>
             {

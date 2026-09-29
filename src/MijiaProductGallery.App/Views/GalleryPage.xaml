@@ -68,7 +68,7 @@
                         <FontIcon Glyph="&#xE70D;" FontSize="10" />
                     </StackPanel>
                     <Button.Flyout>
-                        <MenuFlyout Placement="Bottom">
+                        <MenuFlyout x:Name="SortFlyout" Placement="Bottom" Opening="OnFlyoutOpening">
                             <MenuFlyoutItem Text="默认排序" Tag="default" Click="OnSortItemClick" />
                             <MenuFlyoutSeparator />
                             <MenuFlyoutItem Text="名称 A→Z" Tag="Name:Ascending" Click="OnSortItemClick" />
@@ -354,6 +354,7 @@
                                 x:Name="AvailabilityCombo"
                                 MinWidth="140"
                                 SelectedIndex="0"
+                                DropDownOpened="OnComboOpening"
                                 SelectionChanged="OnAvailabilitySelectionChanged">
                                 <ComboBoxItem Content="全部" />
                                 <ComboBoxItem Content="在售" />
@@ -367,6 +368,7 @@
                                 x:Name="ImageCombo"
                                 MinWidth="140"
                                 SelectedIndex="0"
+                                DropDownOpened="OnComboOpening"
                                 SelectionChanged="OnImageSelectionChanged">
                                 <ComboBoxItem Content="全部" />
                                 <ComboBoxItem Content="有图片" />
@@ -394,6 +396,7 @@
                                 x:Name="DateCombo"
                                 MinWidth="140"
                                 SelectedIndex="0"
+                                DropDownOpened="OnComboOpening"
                                 SelectionChanged="OnDateSelectionChanged">
                                 <ComboBoxItem Content="全部" />
                                 <ComboBoxItem Content="最近 7 天" />

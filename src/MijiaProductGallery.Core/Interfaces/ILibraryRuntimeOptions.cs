@@ -14,4 +14,7 @@ public interface ILibraryRuntimeOptions
 
     /// <summary>更新参数（同时负责持久化）。</summary>
     Task UpdateAsync(int thumbMaxEdge, int thumbQuality, CancellationToken cancellationToken = default);
+
+    /// <summary>启动时从 AppSettings 加载持久化参数（加载后写入共享缩略图设置）。</summary>
+    Task LoadAsync(CancellationToken cancellationToken = default);
 }

@@ -58,30 +58,53 @@ public sealed partial class MainWindow : Window
         }
     }
 
-    /// <summary>默认标题栏不跟随应用主题，深色系模式下显式设置标题栏与按钮颜色。</summary>
+    /// <summary>默认标题栏不跟随应用主题，三种主题模式显式设置标题栏与按钮颜色。</summary>
     private void ApplyTitleBarTheme(string theme)
     {
-        if (theme is not ("Dark" or "Gray"))
-        {
-            return;
-        }
-
         var bar = AppWindow.TitleBar;
-        var background = theme == "Gray"
-            ? Windows.UI.Color.FromArgb(255, 45, 45, 45)
-            : Windows.UI.Color.FromArgb(255, 32, 32, 32);
-        var hover = theme == "Gray"
-            ? Windows.UI.Color.FromArgb(255, 58, 58, 58)
-            : Windows.UI.Color.FromArgb(255, 48, 48, 48);
-        bar.ForegroundColor = Windows.UI.Color.FromArgb(255, 240, 240, 240);
-        bar.BackgroundColor = background;
-        bar.ButtonForegroundColor = Windows.UI.Color.FromArgb(255, 240, 240, 240);
-        bar.ButtonBackgroundColor = background;
-        bar.ButtonHoverForegroundColor = Microsoft.UI.Colors.White;
-        bar.ButtonHoverBackgroundColor = hover;
-        bar.ButtonPressedBackgroundColor = background;
-        bar.ButtonInactiveBackgroundColor = background;
-        bar.ButtonInactiveForegroundColor = Windows.UI.Color.FromArgb(255, 160, 160, 160);
+        if (theme == "Dark")
+        {
+            ApplyTitleBarColors(bar, 0xFF202020, 0xFF303030);
+        }
+        else if (theme == "Gray")
+        {
+            ApplyTitleBarColors(bar, 0xFF3B3B3B, 0xFF4A4A4A);
+        }
+        else
+        {
+            ApplyTitleBarColors(bar, 0xFFFFFFFF, 0xFFE5E5E5);
+        }
+    }
+
+    private static void ApplyTitleBarColors(
+        Microsoft.UI.Windowing.AppWindowTitleBar bar,
+        uint background,
+        uint hover)
+    {
+        var bg = Windows.UI.Color.FromArgb(
+            (byte)(background >> 24), (byte)(background >> 16), (byte)(background >> 8), (byte)background);
+        var hv = Windows.UI.Color.FromArgb(
+            (byte)(hover >> 24), (byte)(hover >> 16), (byte)(hover >> 8), (byte)hover);
+        var fg = Luminance(background) < 128
+            ? Windows.UI.Color.FromArgb(255, 240, 240, 240)
+            : Windows.UI.Color.FromArgb(255, 26, 26, 26);
+        bar.ForegroundColor = fg;
+        bar.BackgroundColor = bg;
+        bar.ButtonForegroundColor = fg;
+        bar.ButtonBackgroundColor = bg;
+        bar.ButtonHoverForegroundColor = fg;
+        bar.ButtonHoverBackgroundColor = hv;
+        bar.ButtonPressedBackgroundColor = bg;
+        bar.ButtonInactiveBackgroundColor = bg;
+        bar.ButtonInactiveForegroundColor = Windows.UI.Color.FromArgb(255, 150, 150, 150);
+    }
+
+    private static int Luminance(uint argb)
+    {
+        var r = (byte)(argb >> 16);
+        var g = (byte)(argb >> 8);
+        var b = (byte)argb;
+        return (r * 299 + g * 587 + b * 114) / 1000;
     }
 
     private async void OnLoaded(object sender, RoutedEventArgs e)
@@ -147,19 +170,17 @@ public sealed partial class MainWindow : Window
     }
 
     /// <summary>主题实时切换：窗口实例保持不变，当前页面与主要 UI 状态全部保留。
-    /// 元素级资源随根元素 RequestedTheme 翻转，窗口/图层背景经画笔覆盖表更新。</summary>
+    /// 元素级资源随根元素 RequestedTheme 翻转，窗口/图层背景经画笔覆盖表更新；
+    /// 弹窗/对话框在打开时经 ThemeManager 对齐主题。</summary>
     private void OnThemeChanged(string theme)
     {
         DispatcherQueue.TryEnqueue(() =>
         {
-            Nav.RequestedTheme = theme switch
-            {
-                "Light" => ElementTheme.Light,
-                "Dark" or "Gray" => ElementTheme.Dark,
-                _ => ElementTheme.Default,
-            };
+            Nav.RequestedTheme = ThemeManager.ToElementTheme(theme);
             ThemePalette.Apply(theme);
             ApplyTitleBarTheme(theme);
+            SearchBox.RequestedTheme = ThemeManager.ToElementTheme(theme);
+            ThemeManager.CurrentTheme = theme;
         });
     }
 

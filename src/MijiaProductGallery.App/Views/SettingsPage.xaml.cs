@@ -24,6 +24,15 @@ public sealed partial class SettingsPage : Page
         Loaded += OnLoaded;
     }
 
+    private void OnComboOpening(object? sender, object e)
+    {
+        if (sender is ComboBox combo)
+        {
+            combo.RequestedTheme = MijiaProductGallery.App.ThemeManager.ToElementTheme(
+                MijiaProductGallery.App.ThemeManager.CurrentTheme);
+        }
+    }
+
     private async void OnLoaded(object sender, RoutedEventArgs e)
     {
         // 先加载持久化设置，再回填各控件显示，保证下拉框反映真实持久化值。

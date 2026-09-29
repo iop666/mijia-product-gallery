@@ -29,6 +29,8 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IUsageStatisticsService, UsageStatisticsService>();
         services.AddSingleton<IAutoSyncScheduler, AutoSyncScheduler>();
         services.AddSingleton<IBackupService, BackupService>();
+        services.AddSingleton<ThumbnailSettings>();
+        services.AddSingleton<ILibraryRuntimeOptions, LibraryRuntimeOptions>();
         services.AddSingleton<IThumbnailService, ThumbnailService>();
         services.AddSingleton<IBaikeApiClient, BaikeApiClient>();
         services.AddSingleton<IImageDownloader, ImageDownloader>();

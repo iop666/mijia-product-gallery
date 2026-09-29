@@ -93,7 +93,7 @@ public partial class App : Application
         }
     }
 
-    protected override void OnLaunched(LaunchActivatedEventArgs args)
+    protected override async void OnLaunched(LaunchActivatedEventArgs args)
     {
         UnhandledException += OnUnhandledException;
         var dispatcherQueue = DispatcherQueue.GetForCurrentThread();
@@ -115,6 +115,10 @@ public partial class App : Application
 
         // 灰色调色板按启动主题挂载/卸载（仅灰色模式有覆盖）。
         ThemePalette.Apply(initialTheme);
+        ThemeManager.CurrentTheme = initialTheme;
+
+        // 缩略图参数：启动时从持久化设置加载（加载/更新都会写入共享 ThumbnailSettings）。
+        await Services.GetRequiredService<ILibraryRuntimeOptions>().LoadAsync();
 
         MainWindow = new MainWindow();
         MainWindow.Activate();
