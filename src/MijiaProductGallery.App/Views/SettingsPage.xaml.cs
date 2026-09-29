@@ -1,6 +1,5 @@
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
-using MijiaProductGallery.Core.Enums;
 using MijiaProductGallery.Core.Interfaces;
 using MijiaProductGallery.ViewModels;
 
@@ -68,14 +67,6 @@ public sealed partial class SettingsPage : Page
             70 => 7,
             105 => 8,
             140 => 9,
-            _ => 3,
-        };
-        SyncIntervalBox.SelectedIndex = vm.AutoInterval switch
-        {
-            SyncAutoInterval.Off => 0,
-            SyncAutoInterval.Startup => 1,
-            SyncAutoInterval.Hours6 => 2,
-            SyncAutoInterval.Weekly => 4,
             _ => 3,
         };
         suppressSelectionEvents = false;
@@ -152,36 +143,7 @@ public sealed partial class SettingsPage : Page
         };
     }
 
-    private async void OnThumbApplyClick(object sender, RoutedEventArgs e)
-    {
-        if (int.TryParse(ThumbEdgeBox.Text, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var edge)
-            && int.TryParse(ThumbQualityBox.Text, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var quality))
-        {
-            await vm.UpdateThumbnailOptionsAsync(edge, quality);
-            ShowNotice("缩略图参数已更新，新参数对新生成的缩略图生效。", InfoBarSeverity.Success);
-        }
-        else
-        {
-            ShowNotice("缩略图参数格式不正确（需为整数）。", InfoBarSeverity.Error);
-        }
-    }
 
-    private void OnSyncIntervalSelectionChanged(object sender, SelectionChangedEventArgs e)
-    {
-        if (suppressSelectionEvents)
-        {
-            return;
-        }
-
-        vm.AutoInterval = ((ComboBox)sender).SelectedIndex switch
-        {
-            0 => SyncAutoInterval.Off,
-            1 => SyncAutoInterval.Startup,
-            2 => SyncAutoInterval.Hours6,
-            4 => SyncAutoInterval.Weekly,
-            _ => SyncAutoInterval.Daily,
-        };
-    }
 
     private async void OnClearHistoryClick(object sender, RoutedEventArgs e)
     {

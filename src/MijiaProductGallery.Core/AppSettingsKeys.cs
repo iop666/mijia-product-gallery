@@ -11,6 +11,9 @@ public static class AppSettingsKeys
     public const string ThumbMaxEdge = "Library.ThumbMaxEdge";
     public const string ThumbQuality = "Library.ThumbQuality";
 
+    // 常规（首启声明）
+    public const string LicenseAgreed = "General.LicenseAgreed";
+
     // 图库（浏览模式与分页）
     public const string GalleryBrowseMode = "Gallery.BrowseMode";
     public const string GalleryPageSize = "Gallery.PageSize";

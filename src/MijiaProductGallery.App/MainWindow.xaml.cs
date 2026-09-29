@@ -153,6 +153,21 @@ public sealed partial class MainWindow : Window
         settingsViewModel.PageSizeChanged += size => DispatcherQueue.TryEnqueue(() => galleryInstance.OnBrowseSettingsChanged());
         settingsViewModel.BrowseModeChanged += _ => DispatcherQueue.TryEnqueue(() => galleryInstance.OnBrowseSettingsChanged());
 
+        // 首次启动：展示使用条款与免责声明，同意后进入应用。
+        var settingsRepository = App.Services.GetRequiredService<ISettingsRepository>();
+        var licenseAgreed = await settingsRepository.GetValueAsync(AppSettingsKeys.LicenseAgreed, false);
+        if (!licenseAgreed)
+        {
+            var agreed = await ShowLicenseDialogAsync();
+            if (!agreed)
+            {
+                Application.Current.Exit();
+                return;
+            }
+
+            await settingsRepository.SetValueAsync(AppSettingsKeys.LicenseAgreed, true);
+        }
+
         var products = App.Services.GetRequiredService<IProductRepository>();
         var hasProducts = await products.CountAsync() > 0;
         if (hasProducts)
@@ -168,6 +183,45 @@ public sealed partial class MainWindow : Window
     /// <summary>主题实时切换：窗口实例保持不变，当前页面与主要 UI 状态全部保留。
     /// 深色↔灰色元素主题相同、无变更信号，借一次浅色过渡强制全树主题资源重解析；
     /// 弹窗/对话框在打开时经 ThemeManager 对齐主题。</summary>
+    /// <summary>首次启动使用条款弹窗：声明应用定位、内容版权与禁止商用。</summary>
+    private async Task<bool> ShowLicenseDialogAsync()
+    {
+        var content = new StackPanel { Spacing = 10, MaxWidth = 520 };
+        content.Children.Add(new TextBlock
+        {
+            Text = "米家产品示例图库是一款开源的 Windows 桌面应用，源代码以 MIT 协议提供：",
+            TextWrapping = TextWrapping.Wrap,
+        });
+        content.Children.Add(new HyperlinkButton
+        {
+            Content = "github.com/iop666/mijia-product-gallery",
+            NavigateUri = new Uri("https://github.com/iop666/mijia-product-gallery"),
+        });
+        content.Children.Add(new TextBlock
+        {
+            Text = "本应用仅供个人学习、研究与软件测试使用，严禁商用。",
+            TextWrapping = TextWrapping.Wrap,
+        });
+        content.Children.Add(new TextBlock
+        {
+            Text = "运行时从米家百科公开产品库获取的产品信息与示例样图，版权归小米公司及相关权利人所有；使用远端内容须遵守相关法律法规及来源方的条款。",
+            TextWrapping = TextWrapping.Wrap,
+        });
+
+        var dialog = new ContentDialog
+        {
+            XamlRoot = Nav.XamlRoot,
+            Title = "使用条款与免责声明",
+            Content = content,
+            PrimaryButtonText = "同意并继续",
+            CloseButtonText = "不同意并退出",
+            DefaultButton = ContentDialogButton.Primary,
+        };
+
+        var result = await dialog.ShowAsync();
+        return result == ContentDialogResult.Primary;
+    }
+
     private void OnThemeChanged(string theme)
     {
         DispatcherQueue.TryEnqueue(() => _ = ApplyThemeLiveAsync(theme));

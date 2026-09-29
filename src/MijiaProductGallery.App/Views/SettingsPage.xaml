@@ -56,22 +56,6 @@
                         </ComboBox>
                     </StackPanel>
                 </StackPanel>
-                <StackPanel Orientation="Horizontal" Spacing="10">
-                    <StackPanel Spacing="4">
-                        <TextBlock Text="缩略图最长边（120–960 px）" FontSize="13" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-                        <TextBox x:Name="ThumbEdgeBox" MinWidth="120" />
-                    </StackPanel>
-                    <StackPanel Spacing="4">
-                        <TextBlock Text="WebP 质量（40–100）" FontSize="13" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-                        <TextBox x:Name="ThumbQualityBox" MinWidth="120" />
-                    </StackPanel>
-                    <Button Content="应用" VerticalAlignment="Bottom" Click="OnThumbApplyClick" />
-                </StackPanel>
-                <TextBlock
-                    Text="修改后仅影响新生成的缩略图；可在数据区清空缩略图缓存后全量重建。"
-                    FontSize="12"
-                    Foreground="{ThemeResource TextFillColorTertiaryBrush}"
-                    TextWrapping="Wrap" />
             </StackPanel>
 
             <!-- 行为 -->
@@ -110,25 +94,21 @@
                 </StackPanel>
             </StackPanel>
 
-            <!-- 同步 -->
-            <StackPanel Spacing="10">
-                <TextBlock Text="同步" FontSize="18" FontWeight="SemiBold" />
-                <StackPanel Spacing="6">
-                    <TextBlock Text="自动同步频率（详细状态请前往同步中心）" FontSize="13" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-                    <ComboBox x:Name="SyncIntervalBox" DropDownOpened="OnComboOpening" MinWidth="160" SelectionChanged="OnSyncIntervalSelectionChanged">
-                        <ComboBoxItem Content="关闭" />
-                        <ComboBoxItem Content="每次启动" />
-                        <ComboBoxItem Content="每 6 小时" />
-                        <ComboBoxItem Content="每天" />
-                        <ComboBoxItem Content="每周" />
-                    </ComboBox>
-                </StackPanel>
-            </StackPanel>
-
             <!-- 关于 -->
             <StackPanel Spacing="10">
                 <TextBlock Text="关于" FontSize="18" FontWeight="SemiBold" />
                 <TextBlock Text="{Binding AppVersion, Mode=OneWay}" FontSize="13" />
+                <StackPanel Orientation="Horizontal" Spacing="6">
+                    <TextBlock Text="开源地址：" FontSize="13" VerticalAlignment="Center" />
+                    <HyperlinkButton
+                        Content="github.com/iop666/mijia-product-gallery"
+                        NavigateUri="https://github.com/iop666/mijia-product-gallery" />
+                </StackPanel>
+                <TextBlock
+                    Text="本应用仅供个人学习、研究与软件测试使用，严禁商用。"
+                    FontSize="12.5"
+                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                    TextWrapping="Wrap" />
                 <TextBlock
                     Text="{Binding DataSourceDescription}"
                     FontSize="12.5"
