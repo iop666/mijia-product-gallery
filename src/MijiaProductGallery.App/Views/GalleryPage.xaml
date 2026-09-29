@@ -198,7 +198,7 @@
                             MinItemHeight="224"
                             MinRowSpacing="10"
                             MinColumnSpacing="10"
-                            ItemsJustification="Start" />
+                            ItemsJustification="Center" />
                     </ItemsRepeater.Layout>
                 </ItemsRepeater>
             </ScrollViewer>
