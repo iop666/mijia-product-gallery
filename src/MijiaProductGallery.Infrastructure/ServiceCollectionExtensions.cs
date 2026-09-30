@@ -17,7 +17,10 @@ public static class ServiceCollectionExtensions
     public static IServiceCollection AddInfrastructure(this IServiceCollection services, string? dataRootOverride = null)
     {
         var paths = new DatabasePaths(dataRootOverride);
+        // 容器构建即创建全部数据目录：先于任何数据库访问（SQLite 打开不存在的目录会抛）。
+        paths.EnsureDirectories();
         services.AddSingleton(paths);
+        services.AddSingleton<Core.Interfaces.IAppDataRoot>(paths);
         services.AddSingleton<Core.Interfaces.IAppDataRoot>(paths);
         services.AddDbContext<GalleryDbContext>(options => options.UseSqlite($"Data Source={paths.DatabaseFile}"));
         services.AddDbContextFactory<GalleryDbContext>(options => options.UseSqlite($"Data Source={paths.DatabaseFile}"));
