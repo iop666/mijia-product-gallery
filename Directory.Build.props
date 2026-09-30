@@ -8,4 +8,10 @@
     <AnalysisLevel>latest</AnalysisLevel>
   </PropertyGroup>
 
+
+  <PropertyGroup Condition="'$(Configuration)' == 'Release'">
+    <!-- 发布件不带调试符号：产物内不残留构建机路径。 -->
+    <DebugType>none</DebugType>
+    <DebugSymbols>false</DebugSymbols>
+  </PropertyGroup>
 </Project>
