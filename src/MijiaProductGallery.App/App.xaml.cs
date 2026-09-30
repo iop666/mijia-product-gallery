@@ -122,6 +122,9 @@ public partial class App : Application
         ThemePalette.Apply(initialTheme);
         ThemeManager.CurrentTheme = initialTheme;
 
+        // 先确保数据库结构（空库建表 / 迁移），任何依赖数据库的启动加载都必须在其后。
+        await Services.GetRequiredService<MijiaProductGallery.Infrastructure.Database.DbInitializer>().InitializeAsync();
+
         // 缩略图参数：启动时从持久化设置加载（加载/更新都会写入共享 ThumbnailSettings）。
         await Services.GetRequiredService<ILibraryRuntimeOptions>().LoadAsync();
 
