@@ -155,6 +155,22 @@ dotnet build src/MijiaProductGallery.App -c Release
 
 ---
 
+## 许可证
+
+本项目的源代码以 [MIT 许可证](LICENSE) 开源，可自由使用、修改与分发。
+
+### 第三方内容声明
+
+本仓库仅包含应用源代码，不包含小米 / 米家产品图片或产品数据快照。
+
+应用运行时可能从第三方服务（米家百科）获取产品信息与图片。此类第三方内容不受本项目 MIT 许可证约束，版权归相应权利人所有，详见 [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md)。
+
+### 数据与图片版权
+
+运行时从米家百科获取的产品信息与示例样图，版权归小米公司及相关权利人所有。本应用仅供个人学习、研究与软件测试使用，严禁商用；使用时请遵守数据来源方的相关条款。
+
+---
+
 ## License
 
 The source code of Mijia Product Gallery is licensed under the
@@ -171,7 +187,3 @@ by this project's MIT License and remains subject to the rights and terms
 of the respective copyright or trademark owners.
 
 See [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md) for details.
-
-### 数据与图片版权
-
-运行时从米家百科获取的产品信息与示例样图，版权归小米公司及相关权利人所有。本应用仅供个人学习、研究与软件测试使用，严禁商用；使用时请遵守数据来源方的相关条款。
