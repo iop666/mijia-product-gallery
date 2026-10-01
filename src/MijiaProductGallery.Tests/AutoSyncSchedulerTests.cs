@@ -124,6 +124,12 @@ public sealed class AutoSyncSchedulerTests : IAsyncLifetime
 
         public SyncTrigger? LastTrigger { get; private set; }
 
+        public event Action<SyncProgress>? ProgressChanged
+        {
+            add { }
+            remove { }
+        }
+
         public Task<SyncRun> SyncNowAsync(SyncTrigger trigger, CancellationToken cancellationToken = default)
         {
             SyncCallCount++;

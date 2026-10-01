@@ -35,6 +35,74 @@ public sealed class SyncEngine(
     private long currentRunId;
     private CancellationTokenSource? linkedCts;
 
+    /// <summary>实时进度上报（工作线程触发，订阅方自行调度到 UI 线程）。</summary>
+    public event Action<SyncProgress>? ProgressChanged;
+
+    private long runStartedTicks;
+    private long lastProgressTicks;
+
+    private double ElapsedSeconds => (Environment.TickCount64 - runStartedTicks) / 1000.0;
+
+    /// <summary>进度上报节流约 10Hz；阶段切换与收口用 force 确保穿透。</summary>
+    private void RaiseRunning(SyncStage stage, string? detail, int done, int total, int failures, bool force = false)
+    {
+        var now = Environment.TickCount64;
+        if (force)
+        {
+            Interlocked.Exchange(ref lastProgressTicks, now);
+        }
+        else
+        {
+            if (now - Interlocked.Read(ref lastProgressTicks) < 100)
+            {
+                return;
+            }
+
+            Interlocked.Exchange(ref lastProgressTicks, now);
+        }
+
+        Raise(new SyncProgress
+        {
+            Status = SyncStatus.Running,
+            Stage = stage,
+            StageIndex = SyncProgress.StageOrder(stage),
+            Detail = detail,
+            Done = done,
+            Total = total,
+            ElapsedSeconds = ElapsedSeconds,
+            OverallPercent = SyncProgress.EstimateOverallPercent(stage, done, total),
+            Failures = failures,
+        });
+    }
+
+    private void RaiseTerminal(SyncStage stage, SyncStatus status, SyncRunCounts? counts, string? errorMessage)
+    {
+        Raise(new SyncProgress
+        {
+            Status = status,
+            Stage = stage,
+            StageIndex = SyncProgress.StageOrder(stage),
+            ElapsedSeconds = ElapsedSeconds,
+            OverallPercent = status == SyncStatus.Success ? 100 : null,
+            Failures = counts?.ImageFailureCount ?? 0,
+            Counts = counts,
+            ErrorMessage = errorMessage,
+        });
+    }
+
+    /// <summary>订阅者异常只记日志，不影响同步本身。</summary>
+    private void Raise(SyncProgress progress)
+    {
+        try
+        {
+            ProgressChanged?.Invoke(progress);
+        }
+        catch (Exception exception)
+        {
+            logger?.LogWarning(exception, "同步进度订阅者异常（已忽略）");
+        }
+    }
+
     public async Task<SyncRun> SyncNowAsync(SyncTrigger trigger, CancellationToken cancellationToken = default)
     {
         if (!singleFlight.Wait(0, cancellationToken))
@@ -83,13 +151,25 @@ public sealed class SyncEngine(
 
         try
         {
+            runStartedTicks = Environment.TickCount64;
             await SetStageAsync(runId, SyncStage.FetchingCategories, cancellationToken);
+            RaiseRunning(SyncStage.FetchingCategories, null, 0, 0, 0, force: true);
             var categories = await apiClient.GetCategoriesAsync(cancellationToken);
             var ptIdToName = categories.ToDictionary(category => category.PtId, category => category.Name);
 
             currentStage = SyncStage.FetchingProducts;
             await SetStageAsync(runId, SyncStage.FetchingProducts, cancellationToken);
-            var (dtoByModel, membership) = await FetchAllProductsAsync(categories, cancellationToken);
+            RaiseRunning(SyncStage.FetchingProducts, $"分类 0/{categories.Count}", 0, categories.Count, 0, force: true);
+            var (dtoByModel, membership) = await FetchAllProductsAsync(
+                categories,
+                (index, found) => RaiseRunning(
+                    SyncStage.FetchingProducts,
+                    $"分类 {index}/{categories.Count} · 已发现 {found:N0} 个型号",
+                    index,
+                    categories.Count,
+                    failures.Count,
+                    force: index >= categories.Count),
+                cancellationToken);
             var remote = BuildRemoteStates(dtoByModel, membership, ptIdToName);
             var remoteByModel = remote.ToDictionary(item => item.Model, StringComparer.Ordinal);
 
@@ -97,30 +177,62 @@ public sealed class SyncEngine(
             await SetStageAsync(runId, SyncStage.Comparing, cancellationToken);
             var localRows = await products.GetAllAsync(cancellationToken);
             var local = localRows.Select(LocalProductState.FromProduct).ToList();
+            RaiseRunning(SyncStage.Comparing, $"本地 {local.Count:N0} · 远端 {remote.Count:N0}", 0, 0, failures.Count, force: true);
 
             currentStage = SyncStage.DownloadingImages;
             await SetStageAsync(runId, SyncStage.DownloadingImages, cancellationToken);
-            var reviews = await DownloadImageReviewsAsync(remoteByModel, local, failures, cancellationToken);
+            RaiseRunning(SyncStage.DownloadingImages, null, 0, 0, failures.Count, force: true);
+            var reviews = await DownloadImageReviewsAsync(
+                remoteByModel,
+                local,
+                failures,
+                (done, total, failureCount) => RaiseRunning(
+                    SyncStage.DownloadingImages,
+                    $"{done:N0}/{total:N0}",
+                    done,
+                    total,
+                    failureCount,
+                    force: done >= total),
+                cancellationToken);
             await AdoptVerifiedTimestampsAsync(local, remoteByModel, reviews.Inputs, cancellationToken);
 
             var diff = ProductCompareRules.CompareCatalog(local, remote, reviews.Inputs);
 
             currentStage = SyncStage.UpdatingDatabase;
             await SetStageAsync(runId, SyncStage.UpdatingDatabase, cancellationToken);
-            foreach (var change in diff.Changes)
+            RaiseRunning(SyncStage.UpdatingDatabase, $"变更 0/{diff.Changes.Count}", 0, diff.Changes.Count, failures.Count, force: true);
+            for (var changeIndex = 0; changeIndex < diff.Changes.Count; changeIndex++)
             {
-                var applied = await ApplyChangeAsync(change, remoteByModel, reviews.Images, storedImages, failures, cancellationToken);
+                var applied = await ApplyChangeAsync(diff.Changes[changeIndex], remoteByModel, reviews.Images, storedImages, failures, cancellationToken);
                 if (applied is not null)
                 {
                     appliedChanges.Add(applied);
                 }
+
+                RaiseRunning(
+                    SyncStage.UpdatingDatabase,
+                    $"变更 {changeIndex + 1}/{diff.Changes.Count}",
+                    changeIndex + 1,
+                    diff.Changes.Count,
+                    failures.Count,
+                    force: changeIndex + 1 >= diff.Changes.Count);
             }
 
             await syncState.AddChangesAsync(runId, appliedChanges, cancellationToken);
 
             currentStage = SyncStage.GeneratingThumbnails;
             await SetStageAsync(runId, SyncStage.GeneratingThumbnails, cancellationToken);
-            await GenerateThumbnailsAsync(storedImages, cancellationToken);
+            await GenerateThumbnailsAsync(
+                storedImages,
+                (done, total) => RaiseRunning(SyncStage.GeneratingThumbnails, $"{done:N0}/{total:N0}", done, total, failures.Count, force: done >= total),
+                cancellationToken);
+            RaiseRunning(
+                SyncStage.GeneratingThumbnails,
+                $"{storedImages.Count:N0}/{storedImages.Count:N0}",
+                storedImages.Count,
+                storedImages.Count,
+                failures.Count,
+                force: true);
 
             var counts = new SyncRunCounts
             {
@@ -134,18 +246,21 @@ public sealed class SyncEngine(
             };
             await syncState.CompleteRunAsync(runId, SyncStatus.Success, SyncStage.Completed, counts, null, NowUnix(), cancellationToken);
             await SaveStateAsync(SyncStatus.Success, SyncStage.Completed, null, cancellationToken);
+            RaiseTerminal(SyncStage.Completed, SyncStatus.Success, counts, null);
             return await syncState.GetRunAsync(runId, cancellationToken)
                 ?? throw new InvalidOperationException("同步完成但缺少运行记录");
         }
         catch (OperationCanceledException)
         {
             await CompleteRunFailedAsync(runId, currentStage, failures, "同步已取消", CancellationToken.None);
+            RaiseTerminal(currentStage, SyncStatus.Failed, new SyncRunCounts { ImageFailureCount = failures.Count }, "同步已取消");
             throw;
         }
         catch (Exception exception)
         {
             logger?.LogError(exception, "同步失败于阶段 {Stage}", currentStage);
             await CompleteRunFailedAsync(runId, currentStage, failures, exception.Message, CancellationToken.None);
+            RaiseTerminal(currentStage, SyncStatus.Failed, new SyncRunCounts { ImageFailureCount = failures.Count }, exception.Message);
             return await syncState.GetRunAsync(runId, cancellationToken)
                 ?? throw new InvalidOperationException("同步失败但缺少运行记录", exception);
         }
@@ -157,12 +272,14 @@ public sealed class SyncEngine(
 
     private async Task<(Dictionary<string, BaikeProductDto> Dtos, Dictionary<string, List<int>> Membership)> FetchAllProductsAsync(
         IReadOnlyList<BaikeCategory> categories,
+        Action<int, int> onCategoryScanned,
         CancellationToken cancellationToken)
     {
         var dtoByModel = new Dictionary<string, BaikeProductDto>(StringComparer.Ordinal);
         var membership = new Dictionary<string, List<int>>(StringComparer.Ordinal);
-        foreach (var category in categories)
+        for (var index = 0; index < categories.Count; index++)
         {
+            var category = categories[index];
             var list = await apiClient.GetProductsByCategoryAsync(category.PtId, cancellationToken);
             foreach (var dto in list)
             {
@@ -183,6 +300,8 @@ public sealed class SyncEngine(
                     categoryIds.Add(category.PtId);
                 }
             }
+
+            onCategoryScanned(index + 1, dtoByModel.Count);
         }
 
         return (dtoByModel, membership);
@@ -213,6 +332,7 @@ public sealed class SyncEngine(
         Dictionary<string, RemoteProductState> remoteByModel,
         List<LocalProductState> local,
         FailureCounter failures,
+        Action<int, int, int> onProgress,
         CancellationToken cancellationToken)
     {
         var localByModel = local.ToDictionary(item => item.Model, StringComparer.Ordinal);
@@ -232,6 +352,8 @@ public sealed class SyncEngine(
             }
         }
 
+        var completed = 0;
+        var total = reviewModels.Count;
         var images = new ConcurrentDictionary<string, byte[]>(StringComparer.Ordinal);
         var inputs = new ConcurrentDictionary<string, ImageReviewInput>(StringComparer.Ordinal);
         using var throttle = new SemaphoreSlim(ImageDownloadConcurrency, ImageDownloadConcurrency);
@@ -264,9 +386,11 @@ public sealed class SyncEngine(
             finally
             {
                 throttle.Release();
+                onProgress(Interlocked.Increment(ref completed), total, failures.Count);
             }
         });
         await Task.WhenAll(tasks);
+        onProgress(total, total, failures.Count);
         return new ReviewOutcome(images, inputs);
     }
 
@@ -445,18 +569,23 @@ public sealed class SyncEngine(
         row.ImageUrl = imageUrl ?? row.ImageUrl;
     }
 
-    private async Task GenerateThumbnailsAsync(IReadOnlyList<ImageStoreResult> storedImages, CancellationToken cancellationToken)
+    private async Task GenerateThumbnailsAsync(
+        IReadOnlyList<ImageStoreResult> storedImages,
+        Action<int, int> onProgress,
+        CancellationToken cancellationToken)
     {
-        foreach (var image in storedImages)
+        for (var index = 0; index < storedImages.Count; index++)
         {
             try
             {
-                await thumbnailService.EnsureThumbnailAsync(image.ImageFileName, image.Sha256, cancellationToken);
+                await thumbnailService.EnsureThumbnailAsync(storedImages[index].ImageFileName, storedImages[index].Sha256, cancellationToken);
             }
             catch (Exception exception) when (exception is ImageValidationException or FileNotFoundException or IOException)
             {
-                logger?.LogWarning(exception, "缩略图生成失败（不影响图库数据）：{File}", image.ImageFileName);
+                logger?.LogWarning(exception, "缩略图生成失败（不影响图库数据）：{File}", storedImages[index].ImageFileName);
             }
+
+            onProgress(index + 1, storedImages.Count);
         }
     }
 

@@ -24,8 +24,29 @@
             </Grid>
 
             <StackPanel Spacing="6" Visibility="{Binding IsRunning, Mode=OneWay, Converter={StaticResource BoolToVisibility}}">
-                <TextBlock Text="{Binding StageText, Mode=OneWay}" FontSize="13" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-                <ProgressBar IsIndeterminate="True" Height="4" />
+                <Grid ColumnSpacing="12">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Text="{Binding ProgressStageText, Mode=OneWay}" FontSize="13" Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextTrimming="CharacterEllipsis" />
+                    <TextBlock
+                        Grid.Column="1"
+                        Text="{Binding ProgressPercentText, Mode=OneWay}"
+                        FontSize="13"
+                        Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                </Grid>
+                <ProgressBar
+                    Height="4"
+                    Minimum="0"
+                    Maximum="100"
+                    IsIndeterminate="{Binding IsProgressIndeterminate, Mode=OneWay}"
+                    Value="{Binding ProgressPercent, Mode=OneWay}" />
+                <TextBlock
+                    Text="{Binding ProgressDetailText, Mode=OneWay}"
+                    FontSize="12.5"
+                    Foreground="{ThemeResource TextFillColorTertiaryBrush}"
+                    TextTrimming="CharacterEllipsis" />
             </StackPanel>
 
             <InfoBar

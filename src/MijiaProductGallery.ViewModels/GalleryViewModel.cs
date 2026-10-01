@@ -58,6 +58,7 @@ public partial class GalleryViewModel : ObservableObject
     private readonly IFavoritesRepository favorites;
     private readonly ISettingsRepository settings;
     private readonly ICollectionRepository? collections;
+    private readonly ISyncService? syncService;
     private readonly ThumbnailLoadQueue thumbnailQueue;
     private readonly IUiDispatcher uiDispatcher;
     private readonly int debounceMilliseconds;
@@ -78,7 +79,8 @@ public partial class GalleryViewModel : ObservableObject
         ISettingsRepository settings,
         IUiDispatcher uiDispatcher,
         int debounceMilliseconds = 500,
-        ICollectionRepository? collections = null)
+        ICollectionRepository? collections = null,
+        ISyncService? syncService = null)
     {
         this.products = products;
         this.thumbnailQueue = thumbnailQueue;
@@ -88,10 +90,15 @@ public partial class GalleryViewModel : ObservableObject
         this.favorites = favorites;
         this.settings = settings;
         this.collections = collections;
+        this.syncService = syncService;
         this.uiDispatcher = uiDispatcher;
         this.debounceMilliseconds = debounceMilliseconds;
         FilterPane = new FilterPaneViewModel(settings);
         FilterPane.FilterChanged += OnFilterChanged;
+        if (syncService is not null)
+        {
+            syncService.ProgressChanged += OnSyncProgress;
+        }
     }
 
     public FilterPaneViewModel FilterPane { get; }
@@ -276,6 +283,54 @@ public partial class GalleryViewModel : ObservableObject
         }
 
         databaseIsEmpty = await products.CountAsync(cancellationToken) == 0;
+        searchGeneration++;
+        await ExecuteAsync(SearchText ?? string.Empty, searchGeneration, cancellationToken);
+    }
+
+    /// <summary>
+    /// 同步引擎进度回调：仅在出现数据变化（新增/下架/改名/换图等）的终态时刷新。
+    /// 可选项（分类/品牌）只在启动时加载一次，同步填充或变更数据后必须重建，否则筛选面板为空。
+    /// </summary>
+    private void OnSyncProgress(SyncProgress progress)
+    {
+        if (progress.Status == SyncStatus.Running || progress.Counts is not { } counts)
+        {
+            return;
+        }
+
+        var changed = counts.NewCount
+            + counts.DelistedCount
+            + counts.CategoryChangedCount
+            + counts.NameChangedCount
+            + counts.ImageChangedCount
+            + counts.IdReusedCount;
+        if (changed == 0)
+        {
+            return;
+        }
+
+        uiDispatcher.Post(() => _ = RefreshAfterSyncAsync());
+    }
+
+    /// <summary>同步产生数据变化后：重建筛选可选项并重查当前视图（回到第 1 页）。</summary>
+    public async Task RefreshAfterSyncAsync(CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            // 重新加载分类/品牌可选项；已保存的筛选选择随设置恢复，用户选择不丢失。
+            await FilterPane.LoadAsync(products, settings, cancellationToken);
+            favoriteIds = [.. await favorites.GetFavoriteProductIdsAsync(cancellationToken)];
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch
+        {
+            // 可选项刷新失败保留旧列表，下面的重查仍会执行。
+        }
+
+        ResetPaging();
         searchGeneration++;
         await ExecuteAsync(SearchText ?? string.Empty, searchGeneration, cancellationToken);
     }

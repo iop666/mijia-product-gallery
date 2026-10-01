@@ -15,7 +15,7 @@ public sealed class HelpContentTests
     {
         var titles = HelpContent.Groups.Select(g => g.Title).ToList();
         Assert.Equal(
-            ["产品卡片", "右键菜单", "收藏", "搜索", "分页模式", "连续滚动模式", "筛选", "其他"],
+            ["产品卡片", "右键菜单", "收藏", "搜索", "分页模式", "连续滚动模式", "筛选", "首次启动与同步", "其他"],
             titles);
     }
 

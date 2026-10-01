@@ -3,6 +3,7 @@ using System.ComponentModel;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
+using MijiaProductGallery.App.Services;
 using MijiaProductGallery.App.Views;
 using MijiaProductGallery.Core;
 using MijiaProductGallery.Infrastructure.Database;
@@ -177,14 +178,51 @@ public sealed partial class MainWindow : Window
 
         var products = App.Services.GetRequiredService<IProductRepository>();
         var hasProducts = await products.CountAsync() > 0;
-        if (hasProducts)
+        if (!hasProducts)
         {
-            ShowGallery();
+            // 首次初始化（空库）：抓取期间不展示可操作 GUI，仅显示控制台加载窗口；
+            // 完成后进入图库，失败或控制台不可用时回退初始化页（重试/选种子包）。
+            AppWindow.Hide();
+            var result = await FirstRunConsole.RunAsync(
+                App.Services.GetRequiredService<IFirstRunInitializer>(),
+                App.Services.GetRequiredService<ISyncService>());
+            if (result == FirstRunConsoleResult.Succeeded)
+            {
+                ShowGallery();
+            }
+            else
+            {
+                ShowInitialization();
+            }
         }
         else
         {
-            ShowInitialization();
+            ShowGallery();
         }
+
+        StartAutoSyncScheduler();
+
+        // 控制台阶段窗口被隐藏：无论走哪条路径都恢复显示并置前。
+        AppWindow.Show();
+        Activate();
+    }
+
+    /// <summary>启动自动同步调度器并执行一次启动检查（"每次启动"频率在此时触发）。</summary>
+    private void StartAutoSyncScheduler()
+    {
+        var scheduler = App.Services.GetRequiredService<IAutoSyncScheduler>();
+        scheduler.Start();
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await scheduler.CheckAndTriggerAsync(isStartupCheck: true);
+            }
+            catch
+            {
+                // 启动检查失败不影响进入应用；等待下一个检查周期。
+            }
+        });
     }
 
     /// <summary>主题实时切换：窗口实例保持不变，当前页面与主要 UI 状态全部保留。

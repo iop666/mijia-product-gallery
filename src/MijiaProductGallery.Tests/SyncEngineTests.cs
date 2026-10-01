@@ -253,6 +253,59 @@ public sealed class SyncEngineTests : IDisposable
         Assert.Equal("新上线", row!.Category);
     }
 
+    [Fact]
+    public async Task Sync_RaisesProgressEvents_StagesInOrder_WithTerminalCounts()
+    {
+        var bytes = ImageFixtures.CreatePng();
+        host.Api.AddCategory(8, "运动健康");
+        host.Api.AddProduct(8, "miwu.band.pro", "米家手环 Pro", "小米出品", 1_700_000_000, 1_700_000_100);
+        host.Downloader.Responses[IconUrl("miwu.band.pro")] = bytes;
+
+        var events = new List<SyncProgress>();
+        var engine = await host.CreateEngineAsync();
+        engine.ProgressChanged += events.Add;
+
+        var run = await engine.SyncNowAsync(SyncTrigger.Manual);
+
+        Assert.Equal(SyncStatus.Success, run.Status);
+        Assert.True(events.Count >= SyncProgress.TotalStages, $"进度事件过少：{events.Count}");
+        Assert.Equal(SyncStatus.Running, events[0].Status);
+        Assert.Equal(SyncStage.FetchingCategories, events[0].Stage);
+
+        // 阶段序号随执行顺序单调不减，且每个执行阶段都出现过。
+        var orders = events.Select(e => SyncProgress.StageOrder(e.Stage)).ToList();
+        Assert.Equal(orders, orders.Order().ToList());
+        Assert.Equal([1, 2, 3, 4, 5, 6, 7], orders.Distinct().Order().ToList());
+
+        // 运行中事件带全流程百分比；终态事件带变更统计与 100%。
+        Assert.All(events, e => Assert.True(e.OverallPercent is null || e.OverallPercent is >= 0 and <= 100));
+        var terminal = events[^1];
+        Assert.Equal(SyncStatus.Success, terminal.Status);
+        Assert.Equal(SyncStage.Completed, terminal.Stage);
+        Assert.Equal(100, terminal.OverallPercent);
+        Assert.Equal(1, terminal.Counts!.NewCount);
+
+        // 下载图片阶段事件带精确计数（1/1）。
+        Assert.Contains(events, e => e.Stage == SyncStage.DownloadingImages && e.Total == 1 && e.Done == 1);
+    }
+
+    [Fact]
+    public async Task Sync_RaisesFailedTerminal_WhenApiFails()
+    {
+        host.Api.CategoriesError = new HttpRequestException("网络不可达");
+        var events = new List<SyncProgress>();
+        var engine = await host.CreateEngineAsync();
+        engine.ProgressChanged += events.Add;
+
+        var run = await engine.SyncNowAsync(SyncTrigger.Manual);
+
+        Assert.Equal(SyncStatus.Failed, run.Status);
+        var terminal = events[^1];
+        Assert.Equal(SyncStatus.Failed, terminal.Status);
+        Assert.Equal("网络不可达", terminal.ErrorMessage);
+        Assert.Null(terminal.OverallPercent);
+    }
+
     public void Dispose()
     {
         host.Dispose();

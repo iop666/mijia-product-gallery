@@ -21,7 +21,6 @@ public static class ServiceCollectionExtensions
         paths.EnsureDirectories();
         services.AddSingleton(paths);
         services.AddSingleton<Core.Interfaces.IAppDataRoot>(paths);
-        services.AddSingleton<Core.Interfaces.IAppDataRoot>(paths);
         services.AddDbContext<GalleryDbContext>(options => options.UseSqlite($"Data Source={paths.DatabaseFile}"));
         services.AddDbContextFactory<GalleryDbContext>(options => options.UseSqlite($"Data Source={paths.DatabaseFile}"));
         services.AddScoped<DbInitializer>();

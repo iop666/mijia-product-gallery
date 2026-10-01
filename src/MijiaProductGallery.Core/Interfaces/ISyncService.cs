@@ -9,6 +9,9 @@ public interface ISyncService
     /// <summary>立即执行一轮全量对比同步；同轮已在进行时返回进行中的那一轮。</summary>
     Task<SyncRun> SyncNowAsync(SyncTrigger trigger, CancellationToken cancellationToken = default);
 
+    /// <summary>实时进度上报（引擎工作线程触发，节流约 10Hz；订阅方自行调度到 UI 线程）。</summary>
+    event Action<SyncProgress>? ProgressChanged;
+
     /// <summary>
     /// 请求取消当前进行中的一轮同步（本轮标记为失败、原因"已取消"，可重试）；
     /// 无进行中轮次时为无操作。

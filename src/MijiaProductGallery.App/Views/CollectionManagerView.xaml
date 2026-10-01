@@ -40,16 +40,16 @@
                             FontSize="15"
                             Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                             Glyph="&#xE735;"
-                            Visibility="{x:Bind conv:UiConverters.ToVisibility(IsDefault), Mode=OneWay}" />
+                            Visibility="{x:Bind conv:UiConverters.ToVisibility(IsDefault), Mode=OneTime}" />
                         <FontIcon
                             Grid.Column="0"
                             FontSize="15"
                             Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                             Glyph="&#xE8B7;"
-                            Visibility="{x:Bind conv:UiConverters.ToVisibility(IsNormal), Mode=OneWay}" />
+                            Visibility="{x:Bind conv:UiConverters.ToVisibility(IsNormal), Mode=OneTime}" />
                         <TextBlock
                             Grid.Column="1"
-                            Text="{x:Bind Path=Name, Mode=OneWay}"
+                            Text="{x:Bind Path=Name, Mode=OneTime}"
                             VerticalAlignment="Center"
                             TextTrimming="CharacterEllipsis" />
                     </Grid>
