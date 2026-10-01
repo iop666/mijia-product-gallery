@@ -1,6 +1,6 @@
 ﻿; 米家产品示例图库 安装包脚本（Inno Setup 6）
 ; 构建示例：
-;   ISCC.exe /DPublishDir=D:\...\publish /DOutputDir=D:\...\0.1.0 installer.iss
+;   ISCC.exe /DPublishDir=D:\...\publish /DOutputDir=D:\...\0.2.0 installer.iss
 
 #ifndef AppName
 #define AppName "米家产品示例图库"
@@ -9,7 +9,7 @@
 #define AppExeName "MijiaProductGallery.App.exe"
 #endif
 #ifndef AppVersion
-#define AppVersion "0.1.0"
+#define AppVersion "0.2.0"
 #endif
 #ifndef PublishDir
 #define PublishDir "publish"
