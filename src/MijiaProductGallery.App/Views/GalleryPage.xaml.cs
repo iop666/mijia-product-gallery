@@ -37,6 +37,11 @@ public sealed partial class GalleryPage : Page
         CardsRepeater.ElementClearing += OnElementClearing;
         vm.PropertyChanged += OnGalleryPropertyChanged;
         vm.CollectionsReloaded += OnCollectionsReloaded;
+        // 页面级接管翻页键（含已被子元素标记处理的按键）：翻页后焦点常落入卡片滚动区，
+        // 原生 ScrollView 会消费 PageUp/PageDown，普通冒泡路由第二次起收不到。
+        AddHandler(KeyDownEvent, new KeyEventHandler(OnPageKeyDown), handledEventsToo: true);
+        // 翻页后把焦点收回页面自身（见 OnPageKeyDown），保证下一枚翻页键仍路由到本页。
+        IsTabStop = true;
     }
 
     /// <summary>收藏夹列表重建后同步选择框显示（ComboBox 对异步重建后的源推送会丢失）。</summary>
@@ -795,59 +800,92 @@ public sealed partial class GalleryPage : Page
     private void OnLastPageClick(object sender, RoutedEventArgs e) => vm?.GoToLastPage();
 
     /// <summary>
-    /// 分页键盘（KeyDown 路由，无加速器悬停提示）：
+    /// 分页键盘（页面级监听，handledEventsToo——即使子元素已处理也接管）：
     /// Esc——关闭筛选面板；←/→/PageUp/PageDown——上一页/下一页；
-    /// Home/End——第一页/最后一页。文本框内按键交还原生编辑。
-    /// 无上/下页时不产生动作，也不重复查询。
+    /// Home/End——第一页/最后一页。
+    /// 弹层（菜单/对话框/下拉）与文本框内按键交还原生；无上/下页时不产生动作。
     /// </summary>
-    protected override void OnKeyDown(KeyRoutedEventArgs e)
+    private void OnPageKeyDown(object sender, KeyRoutedEventArgs e)
     {
-        if (vm is not null)
+        if (vm is null)
         {
-            if (e.Key == Windows.System.VirtualKey.Escape && vm.FilterPane.IsOpen)
-            {
-                vm.FilterPane.IsOpen = false;
-                e.Handled = true;
-                return;
-            }
-
-            if (vm.IsPagedMode && !vm.IsRandomMode)
-            {
-                var focused = Microsoft.UI.Xaml.Input.FocusManager.GetFocusedElement(XamlRoot);
-                if (focused is not TextBox and not AutoSuggestBox)
-                {
-                    var handled = true;
-                    switch (e.Key)
-                    {
-                        case Windows.System.VirtualKey.Left when vm.CanGoPrevPage:
-                        case Windows.System.VirtualKey.PageUp when vm.CanGoPrevPage:
-                            vm.GoToPrevPage();
-                            break;
-                        case Windows.System.VirtualKey.Right when vm.CanGoNextPage:
-                        case Windows.System.VirtualKey.PageDown when vm.CanGoNextPage:
-                            vm.GoToNextPage();
-                            break;
-                        case Windows.System.VirtualKey.Home when vm.CanGoFirstPage:
-                            vm.GoToFirstPage();
-                            break;
-                        case Windows.System.VirtualKey.End when vm.CanGoLastPage:
-                            vm.GoToLastPage();
-                            break;
-                        default:
-                            handled = false;
-                            break;
-                    }
-
-                    if (handled)
-                    {
-                        e.Handled = true;
-                        return;
-                    }
-                }
-            }
+            return;
         }
 
-        base.OnKeyDown(e);
+        var focused = Microsoft.UI.Xaml.Input.FocusManager.GetFocusedElement(XamlRoot);
+        if (focused is not null && IsInPopup(focused))
+        {
+            // 菜单/对话框/下拉内的方向键与 Esc 属于弹层自身导航，交还原生。
+            return;
+        }
+
+        if (focused is TextBox or AutoSuggestBox or ComboBox or ComboBoxItem)
+        {
+            // 文本编辑与下拉选择的原生键盘行为不受翻页接管影响。
+            return;
+        }
+
+        if (e.Key == Windows.System.VirtualKey.Escape && vm.FilterPane.IsOpen)
+        {
+            vm.FilterPane.IsOpen = false;
+            e.Handled = true;
+            return;
+        }
+
+        if (vm.IsPagedMode && !vm.IsRandomMode)
+        {
+            switch (e.Key)
+            {
+                case Windows.System.VirtualKey.Left when vm.CanGoPrevPage:
+                case Windows.System.VirtualKey.PageUp when vm.CanGoPrevPage:
+                    vm.GoToPrevPage();
+                    e.Handled = true;
+                    RefocusPageForNextKey();
+                    return;
+                case Windows.System.VirtualKey.Right when vm.CanGoNextPage:
+                case Windows.System.VirtualKey.PageDown when vm.CanGoNextPage:
+                    vm.GoToNextPage();
+                    e.Handled = true;
+                    RefocusPageForNextKey();
+                    return;
+                case Windows.System.VirtualKey.Home when vm.CanGoFirstPage:
+                    vm.GoToFirstPage();
+                    e.Handled = true;
+                    RefocusPageForNextKey();
+                    return;
+                case Windows.System.VirtualKey.End when vm.CanGoLastPage:
+                    vm.GoToLastPage();
+                    e.Handled = true;
+                    RefocusPageForNextKey();
+                    return;
+            }
+        }
+    }
+
+    /// <summary>
+    /// 翻页后把键盘焦点收回到页面根：翻页会重建卡片并折叠/恢复分页栏，原焦点元素可能被卸载，
+    /// 焦点会落到卡片滚动区等原生消费翻页键的元素上；收回页面自身后，下一枚翻页键必然路由到本页。
+    /// </summary>
+    private void RefocusPageForNextKey()
+    {
+        DispatcherQueue.TryEnqueue(() => Focus(Microsoft.UI.Xaml.FocusState.Programmatic));
+    }
+
+    /// <summary>判断元素是否位于弹层（Popup）子树内：菜单、对话框、下拉都宿主在弹层中。</summary>
+    private static bool IsInPopup(object? element)
+    {
+        DependencyObject? current = element as DependencyObject;
+        while (current is not null)
+        {
+            if (current is Microsoft.UI.Xaml.Controls.Primitives.Popup)
+            {
+                return true;
+            }
+
+            current = Microsoft.UI.Xaml.Media.VisualTreeHelper.GetParent(current);
+        }
+
+        return false;
     }
 
     /// <summary>判断元素是否位于指定祖先的子树内（卡片网格内的方向键交给原生焦点导航）。</summary>
