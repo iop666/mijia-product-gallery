@@ -1,8 +1,18 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using MijiaProductGallery.Core.Interfaces;
-using MijiaProductGallery.Core.Models;
 
 namespace MijiaProductGallery.ViewModels;
+
+/// <summary>分类占比条目：数量与占图库总数的百分比（供进度条与文字展示）。</summary>
+public sealed record CategoryStatItem(string Category, int Count, double Percent)
+{
+    public string PercentText => $"{Percent:0.#}%";
+
+    public string SummaryText => $"{Count} 款 · {PercentText}";
+}
+
+/// <summary>最常使用条目：带名次，便于列表直接展示。</summary>
+public sealed record TopProductItem(int Rank, string Name, string Model, int TotalUseCount);
 
 /// <summary>统计页视图模型：今日/本周/本月/累计四项计数与最常使用产品列表。</summary>
 public partial class StatisticsViewModel : ObservableObject
@@ -38,8 +48,12 @@ public partial class StatisticsViewModel : ObservableObject
     [ObservableProperty]
     private long totalCount;
 
+    /// <summary>最近一次成功刷新的时间描述。</summary>
     [ObservableProperty]
-    private IReadOnlyList<TopUsedProduct> topProducts = [];
+    private string? lastUpdatedText;
+
+    [ObservableProperty]
+    private IReadOnlyList<TopProductItem> topProducts = [];
 
     /// <summary>最常使用列表是否为空（供空态提示直绑）。</summary>
     public bool TopProductsEmpty => TopProducts.Count == 0;
@@ -60,9 +74,12 @@ public partial class StatisticsViewModel : ObservableObject
     [ObservableProperty]
     private int galleryRemovedCount;
 
-    /// <summary>图库概览：各大类数量（按数量降序）。</summary>
+    /// <summary>图库概览：各大类数量（按数量降序，含占比）。</summary>
     [ObservableProperty]
-    private IReadOnlyList<CategoryCount> categoryStats = [];
+    private IReadOnlyList<CategoryStatItem> categoryStats = [];
+
+    /// <summary>大类分布是否为空（供空态提示直绑）。</summary>
+    public bool CategoryStatsEmpty => CategoryStats.Count == 0;
 
     /// <summary>刷新统计（进入页面或请求刷新时调用）。</summary>
     public async Task LoadAsync(CancellationToken cancellationToken = default)
@@ -82,7 +99,9 @@ public partial class StatisticsViewModel : ObservableObject
             WeekCount = statistics.WeekCount;
             MonthCount = statistics.MonthCount;
             TotalCount = statistics.TotalCount;
-            TopProducts = statistics.TopProducts;
+            TopProducts = statistics.TopProducts
+                .Select((item, index) => new TopProductItem(index + 1, item.Name, item.Model, item.TotalUseCount))
+                .ToList();
             OnPropertyChanged(nameof(TopProductsEmpty));
 
             var overview = await statisticsService.GetGalleryOverviewAsync(cancellationToken);
@@ -90,7 +109,15 @@ public partial class StatisticsViewModel : ObservableObject
             GalleryWithImageCount = overview.WithImageCount;
             GalleryWithoutImageCount = overview.WithoutImageCount;
             GalleryRemovedCount = overview.RemovedCount;
-            CategoryStats = overview.Categories;
+            CategoryStats = overview.Categories
+                .Select(category => new CategoryStatItem(
+                    category.Category,
+                    category.Count,
+                    overview.TotalCount <= 0 ? 0 : Math.Round(100.0 * category.Count / overview.TotalCount, 1)))
+                .ToList();
+            OnPropertyChanged(nameof(CategoryStatsEmpty));
+
+            LastUpdatedText = $"更新于 {DateTime.Now:HH:mm}";
         }
         catch (OperationCanceledException)
         {

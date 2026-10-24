@@ -253,19 +253,40 @@ public sealed partial class MainWindow : Window
             AppSettingsKeys.LaunchView, AppSettingsKeys.LaunchViewDefault);
         if (!hasProducts)
         {
-            // 首次初始化（空库）：抓取期间不展示可操作 GUI，仅显示控制台加载窗口；
-            // 完成后进入图库，失败或控制台不可用时回退初始化页（重试/选种子包）。
-            AppWindow.Hide();
-            var result = await FirstRunConsole.RunAsync(
-                App.Services.GetRequiredService<IFirstRunInitializer>(),
-                App.Services.GetRequiredService<ISyncService>());
-            if (result == FirstRunConsoleResult.Succeeded)
+            // 空库只在第一次自动进入控制台加载；中途关闭应用后再次打开停在初始化页，
+            // 由用户选择继续，避免每次启动都从头重跑一遍全量初始化。
+            var initializationStarted = await settingsRepository.GetValueAsync(
+                AppSettingsKeys.InitializationStarted, false);
+            if (!initializationStarted)
             {
-                ShowLaunchView(launchView);
+                try
+                {
+                    await settingsRepository.SetValueAsync(AppSettingsKeys.InitializationStarted, true);
+                }
+                catch
+                {
+                    // 标记写入失败不阻断本次初始化；下次启动最多再自动尝试一次。
+                }
+
+                AppWindow.Hide();
+                var result = await FirstRunConsole.RunAsync(
+                    App.Services.GetRequiredService<IFirstRunInitializer>(),
+                    App.Services.GetRequiredService<ISyncService>(),
+                    App.Services.GetRequiredService<IAppDataRoot>());
+                if (result == FirstRunConsoleResult.Succeeded)
+                {
+                    ShowLaunchView(launchView);
+                }
+                else
+                {
+                    ShowInitializationPending(result == FirstRunConsoleResult.ConsoleUnavailable
+                        ? "无法打开加载窗口。请开始初始化或选择本地种子包继续。"
+                        : "自动初始化未完成。可直接重试或选择种子包。");
+                }
             }
             else
             {
-                ShowInitialization();
+                ShowInitializationPending("上次初始化未完成。请选择继续方式。");
             }
         }
         else
@@ -459,15 +480,32 @@ public sealed partial class MainWindow : Window
         SelectNavItem(recent ? "recent" : favorites ? "favorites" : "gallery");
     }
 
-    /// <summary>供空图库等空状态入口跳转到初始化页。</summary>
-    public void ShowInitializationPage() => ShowInitialization();
+    /// <summary>供空图库等空状态入口跳转到初始化页；页面只展示选项，不自动重跑。</summary>
+    public void ShowInitializationPage()
+    {
+        ShowInitializationPending("图库为空。请开始初始化或选择本地种子包继续。");
+    }
 
-    private void ShowInitialization()
+    /// <summary>进入初始化页前显式置为待启动：页面关闭/应用重启后不会自动再次运行。</summary>
+    private void ShowInitializationPending(string message)
+    {
+        var vm = GetInitializationViewModel();
+        vm.MarkPending(message);
+        ShowInitialization();
+    }
+
+    private InitializationViewModel GetInitializationViewModel()
     {
         initializationViewModel ??= App.Services.GetRequiredService<InitializationViewModel>();
         initializationViewModel.Succeeded -= OnInitializationSucceeded;
         initializationViewModel.Succeeded += OnInitializationSucceeded;
-        initializationPage ??= new InitializationPage(initializationViewModel);
+        return initializationViewModel;
+    }
+
+    private void ShowInitialization()
+    {
+        var vm = GetInitializationViewModel();
+        initializationPage ??= new InitializationPage(vm);
         ContentFrame.Content = initializationPage;
         SelectNavItem("gallery");
     }

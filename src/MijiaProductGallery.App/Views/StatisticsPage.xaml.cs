@@ -8,7 +8,7 @@ using MijiaProductGallery.ViewModels;
 
 namespace MijiaProductGallery.App.Views;
 
-/// <summary>统计页：今日/本周/本月/累计四项计数与最常使用产品列表（无图表）。</summary>
+/// <summary>统计页：使用计数、图库概览、大类分布与最常使用产品列表。</summary>
 public sealed partial class StatisticsPage : Page
 {
     private readonly StatisticsViewModel vm;
@@ -29,6 +29,11 @@ public sealed partial class StatisticsPage : Page
 
     /// <summary>导航到统计页时刷新数据（页面实例复用，Loaded 不会每次触发，统一由路由调用）。</summary>
     public void ActivateView()
+    {
+        _ = vm.LoadAsync();
+    }
+
+    private void OnRefreshClick(object sender, RoutedEventArgs e)
     {
         _ = vm.LoadAsync();
     }

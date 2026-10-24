@@ -5,16 +5,43 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
 
     <ScrollViewer Padding="24,16">
-        <StackPanel Spacing="18" MaxWidth="720" HorizontalAlignment="Left">
-            <StackPanel Orientation="Horizontal" Spacing="10">
-                <TextBlock Text="统计" FontSize="22" FontWeight="SemiBold" />
-                <ProgressRing
-                    IsActive="{Binding IsLoading, Mode=OneWay}"
-                    Width="18"
-                    Height="18"
+        <StackPanel Spacing="18" MaxWidth="780" HorizontalAlignment="Left">
+
+            <!-- 头部：标题 + 最近刷新时间 + 手动刷新 -->
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <StackPanel Spacing="3">
+                    <StackPanel Orientation="Horizontal" Spacing="10">
+                        <TextBlock Text="统计" FontSize="22" FontWeight="SemiBold" />
+                        <ProgressRing
+                            IsActive="{Binding IsLoading, Mode=OneWay}"
+                            Width="16"
+                            Height="16"
+                            VerticalAlignment="Center"
+                            Visibility="{Binding IsLoading, Mode=OneWay, Converter={StaticResource BoolToVisibility}}" />
+                    </StackPanel>
+                    <TextBlock
+                        Text="{Binding LastUpdatedText, Mode=OneWay}"
+                        FontSize="12.5"
+                        Foreground="{ThemeResource TextFillColorTertiaryBrush}"
+                        Visibility="{Binding LastUpdatedText, Mode=OneWay, Converter={StaticResource NullToCollapsed}}" />
+                </StackPanel>
+                <Button
+                    Grid.Column="1"
                     VerticalAlignment="Center"
-                    Visibility="{Binding IsLoading, Mode=OneWay, Converter={StaticResource BoolToVisibility}}" />
-            </StackPanel>
+                    Click="OnRefreshClick"
+                    IsEnabled="{Binding IsLoading, Mode=OneWay, Converter={StaticResource InverseBoolValue}}"
+                    AutomationProperties.Name="刷新统计">
+                    <StackPanel Orientation="Horizontal" Spacing="6">
+                        <FontIcon Glyph="&#xE72C;" FontSize="14" />
+                        <TextBlock Text="刷新" />
+                    </StackPanel>
+                </Button>
+            </Grid>
+
             <InfoBar
                 IsOpen="{Binding HasError, Mode=OneWay}"
                 IsClosable="False"
@@ -23,116 +50,273 @@
                 Message="{Binding ErrorMessage, Mode=OneWay}"
                 Visibility="{Binding HasError, Mode=OneWay, Converter={StaticResource BoolToVisibility}}" />
 
-            <Grid ColumnSpacing="12" RowSpacing="12">
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*" />
-                    <ColumnDefinition Width="*" />
-                    <ColumnDefinition Width="*" />
-                    <ColumnDefinition Width="*" />
-                </Grid.ColumnDefinitions>
-                <Border Style="{StaticResource StatCardStyle}">
-                    <StackPanel Spacing="4">
-                        <TextBlock Text="今日" FontSize="12.5" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-                        <TextBlock Text="{Binding TodayCount, Mode=OneWay}" FontSize="28" FontWeight="SemiBold" />
-                    </StackPanel>
-                </Border>
-                <Border Grid.Column="1" Style="{StaticResource StatCardStyle}">
-                    <StackPanel Spacing="4">
-                        <TextBlock Text="本周" FontSize="12.5" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-                        <TextBlock Text="{Binding WeekCount, Mode=OneWay}" FontSize="28" FontWeight="SemiBold" />
-                    </StackPanel>
-                </Border>
-                <Border Grid.Column="2" Style="{StaticResource StatCardStyle}">
-                    <StackPanel Spacing="4">
-                        <TextBlock Text="本月" FontSize="12.5" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-                        <TextBlock Text="{Binding MonthCount, Mode=OneWay}" FontSize="28" FontWeight="SemiBold" />
-                    </StackPanel>
-                </Border>
-                <Border Grid.Column="3" Style="{StaticResource StatCardStyle}">
-                    <StackPanel Spacing="4">
-                        <TextBlock Text="累计" FontSize="12.5" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-                        <TextBlock Text="{Binding TotalCount, Mode=OneWay}" FontSize="28" FontWeight="SemiBold" />
-                    </StackPanel>
-                </Border>
-            </Grid>
-
-            <TextBlock Text="图库概览" FontSize="16" FontWeight="SemiBold" Margin="0,8,0,0" />
-            <Grid ColumnSpacing="12">
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*" />
-                    <ColumnDefinition Width="*" />
-                    <ColumnDefinition Width="*" />
-                    <ColumnDefinition Width="*" />
-                </Grid.ColumnDefinitions>
-                <Border Style="{StaticResource StatCardStyle}">
-                    <StackPanel Spacing="4">
-                        <TextBlock Text="产品总数" FontSize="12.5" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-                        <TextBlock Text="{Binding GalleryTotalCount, Mode=OneWay}" FontSize="24" FontWeight="SemiBold" />
-                    </StackPanel>
-                </Border>
-                <Border Grid.Column="1" Style="{StaticResource StatCardStyle}">
-                    <StackPanel Spacing="4">
-                        <TextBlock Text="有图片" FontSize="12.5" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-                        <TextBlock Text="{Binding GalleryWithImageCount, Mode=OneWay}" FontSize="24" FontWeight="SemiBold" />
-                    </StackPanel>
-                </Border>
-                <Border Grid.Column="2" Style="{StaticResource StatCardStyle}">
-                    <StackPanel Spacing="4">
-                        <TextBlock Text="无图片" FontSize="12.5" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-                        <TextBlock Text="{Binding GalleryWithoutImageCount, Mode=OneWay}" FontSize="24" FontWeight="SemiBold" />
-                    </StackPanel>
-                </Border>
-                <Border Grid.Column="3" Style="{StaticResource StatCardStyle}">
-                    <StackPanel Spacing="4">
-                        <TextBlock Text="官网已移除" FontSize="12.5" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-                        <TextBlock Text="{Binding GalleryRemovedCount, Mode=OneWay}" FontSize="24" FontWeight="SemiBold" />
-                    </StackPanel>
-                </Border>
-            </Grid>
-
-            <TextBlock Text="各大类数量" FontSize="16" FontWeight="SemiBold" Margin="0,8,0,0" />
-            <Border Style="{StaticResource StatCardStyle}" Padding="14,8">
-                <ItemsControl ItemsSource="{Binding CategoryStats, Mode=OneWay}">
-                    <ItemsControl.ItemTemplate>
-                        <DataTemplate>
-                            <Grid ColumnSpacing="12" Padding="6,3">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="*" />
-                                    <ColumnDefinition Width="Auto" />
-                                </Grid.ColumnDefinitions>
-                                <TextBlock Text="{Binding Category}" />
-                                <TextBlock
-                                    Grid.Column="1"
-                                    Text="{Binding Count}"
-                                    Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-                            </Grid>
-                        </DataTemplate>
-                    </ItemsControl.ItemTemplate>
-                </ItemsControl>
-            </Border>
-
-            <TextBlock Text="最常使用" FontSize="16" FontWeight="SemiBold" Margin="0,8,0,0" />
-            <ItemsControl ItemsSource="{Binding TopProducts, Mode=OneWay}">
-                <ItemsControl.ItemTemplate>
-                    <DataTemplate>
-                        <Grid ColumnSpacing="12" Padding="10,6">
+            <!-- 使用情况 -->
+            <StackPanel Spacing="8">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Text="使用情况" FontSize="16" FontWeight="SemiBold" />
+                    <TextBlock
+                        Grid.Column="1"
+                        Text="含查看、复制、拖拽等操作"
+                        FontSize="12"
+                        Foreground="{ThemeResource TextFillColorTertiaryBrush}"
+                        VerticalAlignment="Bottom" />
+                </Grid>
+                <Grid ColumnSpacing="12">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <Border Style="{StaticResource StatCardStyle}" Padding="0">
+                        <Grid>
                             <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="4" />
                                 <ColumnDefinition Width="*" />
-                                <ColumnDefinition Width="Auto" />
                             </Grid.ColumnDefinitions>
-                            <TextBlock Text="{Binding Name}" TextTrimming="CharacterEllipsis" ToolTipService.ToolTip="{Binding Model}" />
-                            <TextBlock
-                                Grid.Column="1"
-                                Text="{Binding TotalUseCount}"
-                                Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                            <Border Background="{ThemeResource AccentFillColorDefaultBrush}" CornerRadius="7,0,0,7" />
+                            <StackPanel Grid.Column="1" Padding="14,10" Spacing="6">
+                                <TextBlock Text="今日" FontSize="12.5" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                                <StackPanel Orientation="Horizontal" Spacing="4">
+                                    <TextBlock Text="{Binding TodayCount, Mode=OneWay}" FontSize="26" FontWeight="SemiBold" />
+                                    <TextBlock Text="次" FontSize="12" Foreground="{ThemeResource TextFillColorTertiaryBrush}" VerticalAlignment="Bottom" Margin="0,0,0,4" />
+                                </StackPanel>
+                            </StackPanel>
                         </Grid>
-                    </DataTemplate>
-                </ItemsControl.ItemTemplate>
-            </ItemsControl>
-            <TextBlock
-                Text="暂无使用记录"
-                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                Visibility="{Binding TopProductsEmpty, Mode=OneWay, Converter={StaticResource BoolToVisibility}}" />
+                    </Border>
+                    <Border Grid.Column="1" Style="{StaticResource StatCardStyle}" Padding="0">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="4" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <Border Background="{ThemeResource AccentFillColorDefaultBrush}" CornerRadius="7,0,0,7" />
+                            <StackPanel Grid.Column="1" Padding="14,10" Spacing="6">
+                                <TextBlock Text="本周" FontSize="12.5" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                                <StackPanel Orientation="Horizontal" Spacing="4">
+                                    <TextBlock Text="{Binding WeekCount, Mode=OneWay}" FontSize="26" FontWeight="SemiBold" />
+                                    <TextBlock Text="次" FontSize="12" Foreground="{ThemeResource TextFillColorTertiaryBrush}" VerticalAlignment="Bottom" Margin="0,0,0,4" />
+                                </StackPanel>
+                            </StackPanel>
+                        </Grid>
+                    </Border>
+                    <Border Grid.Column="2" Style="{StaticResource StatCardStyle}" Padding="0">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="4" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <Border Background="{ThemeResource AccentFillColorDefaultBrush}" CornerRadius="7,0,0,7" />
+                            <StackPanel Grid.Column="1" Padding="14,10" Spacing="6">
+                                <TextBlock Text="本月" FontSize="12.5" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                                <StackPanel Orientation="Horizontal" Spacing="4">
+                                    <TextBlock Text="{Binding MonthCount, Mode=OneWay}" FontSize="26" FontWeight="SemiBold" />
+                                    <TextBlock Text="次" FontSize="12" Foreground="{ThemeResource TextFillColorTertiaryBrush}" VerticalAlignment="Bottom" Margin="0,0,0,4" />
+                                </StackPanel>
+                            </StackPanel>
+                        </Grid>
+                    </Border>
+                    <Border Grid.Column="3" Style="{StaticResource StatCardStyle}" Padding="0">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="4" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <Border Background="{ThemeResource AccentFillColorDefaultBrush}" CornerRadius="7,0,0,7" />
+                            <StackPanel Grid.Column="1" Padding="14,10" Spacing="6">
+                                <TextBlock Text="累计" FontSize="12.5" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                                <StackPanel Orientation="Horizontal" Spacing="4">
+                                    <TextBlock Text="{Binding TotalCount, Mode=OneWay}" FontSize="26" FontWeight="SemiBold" />
+                                    <TextBlock Text="次" FontSize="12" Foreground="{ThemeResource TextFillColorTertiaryBrush}" VerticalAlignment="Bottom" Margin="0,0,0,4" />
+                                </StackPanel>
+                            </StackPanel>
+                        </Grid>
+                    </Border>
+                </Grid>
+            </StackPanel>
+
+            <!-- 图库概览 -->
+            <StackPanel Spacing="8">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Text="图库概览" FontSize="16" FontWeight="SemiBold" />
+                    <TextBlock
+                        Grid.Column="1"
+                        Text="按产品维度统计"
+                        FontSize="12"
+                        Foreground="{ThemeResource TextFillColorTertiaryBrush}"
+                        VerticalAlignment="Bottom" />
+                </Grid>
+                <Grid ColumnSpacing="12">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <Border Style="{StaticResource StatCardStyle}" Padding="14,12">
+                        <StackPanel Spacing="8">
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <FontIcon Glyph="&#xE8F1;" FontSize="13" Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}" VerticalAlignment="Center" />
+                                <TextBlock Text="产品总数" FontSize="12.5" Foreground="{ThemeResource TextFillColorSecondaryBrush}" VerticalAlignment="Center" />
+                            </StackPanel>
+                            <TextBlock Text="{Binding GalleryTotalCount, Mode=OneWay}" FontSize="24" FontWeight="SemiBold" />
+                        </StackPanel>
+                    </Border>
+                    <Border Grid.Column="1" Style="{StaticResource StatCardStyle}" Padding="14,12">
+                        <StackPanel Spacing="8">
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <FontIcon Glyph="&#xE8B7;" FontSize="13" Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}" VerticalAlignment="Center" />
+                                <TextBlock Text="有图片" FontSize="12.5" Foreground="{ThemeResource TextFillColorSecondaryBrush}" VerticalAlignment="Center" />
+                            </StackPanel>
+                            <TextBlock Text="{Binding GalleryWithImageCount, Mode=OneWay}" FontSize="24" FontWeight="SemiBold" />
+                        </StackPanel>
+                    </Border>
+                    <Border Grid.Column="2" Style="{StaticResource StatCardStyle}" Padding="14,12">
+                        <StackPanel Spacing="8">
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <FontIcon Glyph="&#xE7BA;" FontSize="13" Foreground="{ThemeResource SystemFillColorCautionBrush}" VerticalAlignment="Center" />
+                                <TextBlock Text="无图片" FontSize="12.5" Foreground="{ThemeResource TextFillColorSecondaryBrush}" VerticalAlignment="Center" />
+                            </StackPanel>
+                            <TextBlock Text="{Binding GalleryWithoutImageCount, Mode=OneWay}" FontSize="24" FontWeight="SemiBold" />
+                        </StackPanel>
+                    </Border>
+                    <Border Grid.Column="3" Style="{StaticResource StatCardStyle}" Padding="14,12">
+                        <StackPanel Spacing="8">
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <FontIcon Glyph="&#xE74D;" FontSize="13" Foreground="{ThemeResource TextFillColorTertiaryBrush}" VerticalAlignment="Center" />
+                                <TextBlock Text="官网已移除" FontSize="12.5" Foreground="{ThemeResource TextFillColorSecondaryBrush}" VerticalAlignment="Center" />
+                            </StackPanel>
+                            <TextBlock Text="{Binding GalleryRemovedCount, Mode=OneWay}" FontSize="24" FontWeight="SemiBold" />
+                        </StackPanel>
+                    </Border>
+                </Grid>
+            </StackPanel>
+
+            <!-- 大类分布 -->
+            <StackPanel Spacing="8">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Text="大类分布" FontSize="16" FontWeight="SemiBold" />
+                    <TextBlock
+                        Grid.Column="1"
+                        Text="占比按全库产品计算"
+                        FontSize="12"
+                        Foreground="{ThemeResource TextFillColorTertiaryBrush}"
+                        VerticalAlignment="Bottom" />
+                </Grid>
+                <Border
+                    Style="{StaticResource StatCardStyle}"
+                    Padding="16,10"
+                    Visibility="{Binding CategoryStatsEmpty, Mode=OneWay, Converter={StaticResource InverseBool}}">
+                    <ItemsControl ItemsSource="{Binding CategoryStats, Mode=OneWay}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Grid Padding="0,5" RowSpacing="5">
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
+                                    </Grid.RowDefinitions>
+                                    <Grid ColumnSpacing="12">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Text="{Binding Category}" FontSize="13" TextTrimming="CharacterEllipsis" />
+                                        <TextBlock
+                                            Grid.Column="1"
+                                            Text="{Binding SummaryText}"
+                                            FontSize="12.5"
+                                            Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                                    </Grid>
+                                    <ProgressBar Grid.Row="1" Height="4" Minimum="0" Maximum="100" Value="{Binding Percent}" />
+                                </Grid>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </Border>
+                <TextBlock
+                    Text="暂无分类数据"
+                    FontSize="13"
+                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                    Visibility="{Binding CategoryStatsEmpty, Mode=OneWay, Converter={StaticResource BoolToVisibility}}" />
+            </StackPanel>
+
+            <!-- 最常使用 -->
+            <StackPanel Spacing="8">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Text="最常使用" FontSize="16" FontWeight="SemiBold" />
+                    <TextBlock
+                        Grid.Column="1"
+                        Text="按累计操作次数排序"
+                        FontSize="12"
+                        Foreground="{ThemeResource TextFillColorTertiaryBrush}"
+                        VerticalAlignment="Bottom" />
+                </Grid>
+                <Border
+                    Style="{StaticResource StatCardStyle}"
+                    Padding="8"
+                    Visibility="{Binding TopProductsEmpty, Mode=OneWay, Converter={StaticResource InverseBool}}">
+                    <ItemsControl ItemsSource="{Binding TopProducts, Mode=OneWay}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Grid ColumnSpacing="12" Padding="10,8">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="26" />
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <Border
+                                        Width="26"
+                                        Height="26"
+                                        CornerRadius="13"
+                                        Background="{ThemeResource SubtleFillColorSecondaryBrush}"
+                                        VerticalAlignment="Center">
+                                        <TextBlock
+                                            Text="{Binding Rank}"
+                                            FontSize="12"
+                                            HorizontalAlignment="Center"
+                                            VerticalAlignment="Center"
+                                            Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                                    </Border>
+                                    <StackPanel Grid.Column="1" Spacing="1" VerticalAlignment="Center">
+                                        <TextBlock Text="{Binding Name}" FontSize="13" TextTrimming="CharacterEllipsis" ToolTipService.ToolTip="{Binding Name}" />
+                                        <TextBlock
+                                            Text="{Binding Model}"
+                                            FontSize="11.5"
+                                            Foreground="{ThemeResource TextFillColorTertiaryBrush}"
+                                            TextTrimming="CharacterEllipsis" />
+                                    </StackPanel>
+                                    <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="3" VerticalAlignment="Center">
+                                        <TextBlock Text="{Binding TotalUseCount}" FontSize="13" FontWeight="SemiBold" />
+                                        <TextBlock Text="次" FontSize="11.5" Foreground="{ThemeResource TextFillColorTertiaryBrush}" VerticalAlignment="Bottom" Margin="0,0,0,1" />
+                                    </StackPanel>
+                                </Grid>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </Border>
+                <TextBlock
+                    Text="暂无使用记录。查看详情、复制或拖拽产品后，这里会按使用次数排序。"
+                    FontSize="13"
+                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                    TextWrapping="Wrap"
+                    Visibility="{Binding TopProductsEmpty, Mode=OneWay, Converter={StaticResource BoolToVisibility}}" />
+            </StackPanel>
         </StackPanel>
     </ScrollViewer>
 </Page>

@@ -217,7 +217,7 @@ public sealed class ThumbnailLoadQueueTests : IAsyncLifetime
     }
 }
 
-/// <summary>初始化页视图模型测试：成功/失败路径与重试携带种子路径。</summary>
+/// <summary>初始化页视图模型测试：成功/失败路径、重试携带种子路径与“不自动重跑”。</summary>
 public sealed class InitializationViewModelTests
 {
     [Fact]
@@ -277,6 +277,48 @@ public sealed class InitializationViewModelTests
         Assert.Equal(InitializationUiState.Succeeded, vm.State);
     }
 
+    [Fact]
+    public void MarkPending_ReturnsToIdle_WithoutRunningInitializer()
+    {
+        var initializer = new ScriptedInitializer(new InitializationReport
+        {
+            Outcome = InitializationOutcome.AlreadyInitialized,
+        });
+        var calls = 0;
+        initializer.OnInitialize = _ => calls++;
+        var vm = new InitializationViewModel(initializer);
+
+        vm.MarkPending("上次初始化未完成。请选择继续方式。");
+
+        Assert.Equal(InitializationUiState.Idle, vm.State);
+        Assert.True(vm.IsIdle);
+        Assert.True(vm.IsActionable);
+        Assert.True(vm.CanPickSeed);
+        Assert.Equal("开始初始化", vm.PrimaryActionText);
+        Assert.Equal(0, calls);
+    }
+
+    [Fact]
+    public async Task RunAsync_WhileRunning_DoesNotStartSecondRun()
+    {
+        var initializer = new BlockingInitializer();
+        var vm = new InitializationViewModel(initializer);
+
+        var first = vm.RunAsync();
+        var second = vm.RunAsync();
+        Assert.Equal(1, initializer.Calls);
+
+        initializer.Complete(new InitializationReport
+        {
+            Outcome = InitializationOutcome.CompletedFromSeed,
+            SnapshotDate = "2026-09-28",
+        });
+        await Task.WhenAll(first, second);
+
+        Assert.Equal(1, initializer.Calls);
+        Assert.Equal(InitializationUiState.Succeeded, vm.State);
+    }
+
     private static SeedImportResult SeedResult(string snapshotDate)
     {
         return new SeedImportResult
@@ -304,5 +346,24 @@ public sealed class InitializationViewModelTests
             OnInitialize?.Invoke(explicitSeedPath);
             return Task.FromResult(report);
         }
+    }
+
+    private sealed class BlockingInitializer : IFirstRunInitializer
+    {
+        private readonly TaskCompletionSource<InitializationReport> gate =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public int Calls { get; private set; }
+
+        public Task<InitializationReport> InitializeAsync(
+            string? explicitSeedPath = null,
+            IProgress<SeedImportProgress>? progress = null,
+            CancellationToken cancellationToken = default)
+        {
+            Calls++;
+            return gate.Task;
+        }
+
+        public void Complete(InitializationReport report) => gate.SetResult(report);
     }
 }

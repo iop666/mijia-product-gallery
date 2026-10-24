@@ -20,14 +20,13 @@
             <ColumnDefinition Width="Auto" />
         </Grid.ColumnDefinitions>
 
-        <!-- 内容列：工具行 / Chip 行 / 随机横幅 / 卡片网格 -->
+        <!-- 内容列：工具行 / Chip 行 / 随机横幅 / 卡片网格 / 分页栏 -->
         <Grid Grid.Column="0" RowSpacing="8" Margin="16,12,16,12">
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="*" />
-                <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
             </Grid.RowDefinitions>
 
@@ -221,22 +220,9 @@
                 </Grid>
             </Border>
 
-            <!-- 操作提示：位于卡片区与分页栏之间，不再遮挡翻页控件 -->
-            <InfoBar
-                Grid.Row="4"
-                x:Name="NoticeBar"
-                AutomationProperties.LiveSetting="Polite"
-                IsOpen="False"
-                IsClosable="True"
-                Severity="Informational"
-                Title="提示"
-                MaxWidth="720"
-                Margin="0,8,0,0"
-                HorizontalAlignment="Center" />
-
             <!-- 分页栏：固定内容区底部，不随卡片滚动；随机/连续滚动模式隐藏 -->
             <Border
-                Grid.Row="5"
+                Grid.Row="4"
                 Background="{ThemeResource ControlFillColorSecondaryBrush}"
                 BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
                 BorderThickness="1"
@@ -346,6 +332,38 @@
                     AutomationProperties.Name="{x:Bind Vm.NoResultsActionText, Mode=OneWay}"
                     Visibility="{x:Bind local:UiConverters.ToVisibility(Vm.HasNoResultsAction), Mode=OneWay}"
                     Click="OnNoResultsActionClick" />
+            </StackPanel>
+
+            <!-- 顶部悬浮提示：不占布局、不挤压卡片与翻页栏；错误与操作反馈都在上半部出现 -->
+            <StackPanel
+                Grid.Row="0"
+                Grid.RowSpan="5"
+                Canvas.ZIndex="20"
+                VerticalAlignment="Top"
+                HorizontalAlignment="Center"
+                MaxWidth="680"
+                Margin="0,44,0,0"
+                Spacing="8">
+                <Border Style="{StaticResource NoticeHostStyle}">
+                    <InfoBar
+                        x:Name="DragHintBar"
+                        Style="{StaticResource NoticeInfoBarStyle}"
+                        IsOpen="False"
+                        IsClosable="True"
+                        Severity="Informational"
+                        Title="小技巧：拖出原图"
+                        Message="左键按住产品卡片并拖出，可把原图直接拖到文件夹，或拖进支持图片输入的软件。"
+                        CloseButtonClick="OnDragHintClose" />
+                </Border>
+                <Border Style="{StaticResource NoticeHostStyle}">
+                    <InfoBar
+                        x:Name="NoticeBar"
+                        Style="{StaticResource NoticeInfoBarStyle}"
+                        IsOpen="False"
+                        IsClosable="True"
+                        Severity="Informational"
+                        Title="提示" />
+                </Border>
             </StackPanel>
         </Grid>
 

@@ -6,7 +6,7 @@ using MijiaProductGallery.ViewModels;
 
 namespace MijiaProductGallery.App.Views;
 
-/// <summary>首次初始化页：状态展示（进度/阶段/错误）与重试、选择种子包、在线初始化入口。</summary>
+/// <summary>首次初始化页：状态展示（进度/阶段/错误）与开始初始化、选择种子包入口。</summary>
 public sealed partial class InitializationPage : Page
 {
     private readonly InitializationViewModel vm;
@@ -21,23 +21,10 @@ public sealed partial class InitializationPage : Page
         InitializeComponent();
         vm = viewModel;
         vm.Succeeded += () => InitializationSucceeded?.Invoke();
-        Loaded += OnLoaded;
-    }
-
-    private bool started;
-
-    private async void OnLoaded(object sender, RoutedEventArgs e)
-    {
-        if (!started)
-        {
-            started = true;
-            await vm.RunAsync();
-        }
     }
 
     private async void OnRetryClick(object sender, RoutedEventArgs e)
     {
-        started = true;
         await vm.RunAsync();
     }
 
@@ -58,14 +45,7 @@ public sealed partial class InitializationPage : Page
         var file = await picker.PickSingleFileAsync();
         if (file is not null)
         {
-            started = true;
             await vm.RetryWithSeedAsync(file.Path);
         }
-    }
-
-    private async void OnOnlineInitClick(object sender, RoutedEventArgs e)
-    {
-        started = true;
-        await vm.RunAsync();
     }
 }

@@ -177,17 +177,22 @@
         </StackPanel>
     </ScrollViewer>
 
-    <!-- 操作结果通知：浮于页面底部，长页面滚动时也始终可见 -->
-    <InfoBar
-        x:Name="NoticeBar"
-        AutomationProperties.LiveSetting="Polite"
-        IsOpen="False"
-        IsClosable="True"
-        Severity="Informational"
-        Title="提示"
-        MaxWidth="680"
+    <!-- 操作结果通知：与图库统一为顶部悬浮、实底，不占布局 -->
+    <StackPanel
+        Canvas.ZIndex="20"
+        VerticalAlignment="Top"
         HorizontalAlignment="Center"
-        VerticalAlignment="Bottom"
-        Margin="24,0,24,20" />
+        MaxWidth="680"
+        Margin="24,44,24,0">
+        <Border Style="{StaticResource NoticeHostStyle}">
+            <InfoBar
+                x:Name="NoticeBar"
+                Style="{StaticResource NoticeInfoBarStyle}"
+                IsOpen="False"
+                IsClosable="True"
+                Severity="Informational"
+                Title="提示" />
+        </Border>
+    </StackPanel>
     </Grid>
 </Page>

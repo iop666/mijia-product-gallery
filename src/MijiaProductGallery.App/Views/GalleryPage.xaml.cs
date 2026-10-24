@@ -4,6 +4,7 @@ using WinRT.Interop;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
+using MijiaProductGallery.Core;
 using MijiaProductGallery.Core.Enums;
 using MijiaProductGallery.Core.Models;
 using MijiaProductGallery.Core.Query;
@@ -21,8 +22,10 @@ public sealed partial class GalleryPage : Page
 {
     private GalleryViewModel? vm;
     private readonly IUsageService usage;
+    private readonly ISettingsRepository settings;
     private ContentDialog? collectionManagerDialog;
     private readonly List<ProductCardControl> liveCards = [];
+    private bool dragHintChecked;
 
     public GalleryViewModel Vm => vm ?? throw new InvalidOperationException("图库视图模型尚未初始化");
 
@@ -32,6 +35,7 @@ public sealed partial class GalleryPage : Page
         vm = viewModel;
         DataContext = viewModel;
         usage = App.Services.GetRequiredService<IUsageService>();
+        settings = App.Services.GetRequiredService<ISettingsRepository>();
         Loaded += OnLoaded;
         CardsRepeater.ElementPrepared += OnElementPrepared;
         CardsRepeater.ElementClearing += OnElementClearing;
@@ -103,6 +107,43 @@ public sealed partial class GalleryPage : Page
 
         SyncFilterCombos();
         UpdateSortMenuChecks();
+        await MaybeShowDragHintAsync();
+    }
+
+    /// <summary>首次进入有内容的图库时提示一次拖拽：说明左键按住可把原图拖到外部应用。</summary>
+    private async Task MaybeShowDragHintAsync()
+    {
+        if (dragHintChecked || vm is null)
+        {
+            return;
+        }
+
+        try
+        {
+            if (await settings.GetValueAsync(AppSettingsKeys.DragHintSeen, false))
+            {
+                dragHintChecked = true;
+                return;
+            }
+
+            if (vm.State != GalleryLoadState.Ready || vm.Cards.Count == 0)
+            {
+                return;
+            }
+
+            dragHintChecked = true;
+            DragHintBar.IsOpen = true;
+            await settings.SetValueAsync(AppSettingsKeys.DragHintSeen, true);
+        }
+        catch
+        {
+            // 提示读取/写入失败不影响图库浏览。
+        }
+    }
+
+    private void OnDragHintClose(InfoBar sender, object args)
+    {
+        sender.IsOpen = false;
     }
 
     /// <summary>排序菜单：当前生效项打勾（恢复默认排序时勾"默认排序"）。</summary>

@@ -17,7 +17,7 @@
                 HorizontalAlignment="Center"
                 Foreground="{ThemeResource AccentFillColorDefaultBrush}" />
             <TextBlock
-                Text="正在初始化米家产品示例图库"
+                Text="初始化米家产品示例图库"
                 FontSize="22"
                 FontWeight="SemiBold"
                 HorizontalAlignment="Center" />
@@ -32,7 +32,39 @@
                 IsIndeterminate="{x:Bind Vm.IsIndeterminate, Mode=OneWay}"
                 Value="{x:Bind Vm.ProgressValue, Mode=OneWay}"
                 Maximum="100"
-                Height="4" />
+                Height="4"
+                Visibility="{x:Bind local:UiConverters.ToInverseVisibility(Vm.IsActionable), Mode=OneWay}" />
+
+            <!-- 首次启动明确告知下载位置：便携版可直接随 Data 目录整体搬迁 -->
+            <Border
+                Background="{ThemeResource ControlFillColorSecondaryBrush}"
+                BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                BorderThickness="1"
+                CornerRadius="8"
+                Padding="14,10"
+                HorizontalAlignment="Stretch">
+                <StackPanel Spacing="3">
+                    <TextBlock
+                        Text="图片下载目录"
+                        FontSize="12"
+                        Foreground="{ThemeResource TextFillColorTertiaryBrush}" />
+                    <TextBlock
+                        Text="{x:Bind Vm.ImagesDirectory, Mode=OneWay}"
+                        FontSize="12.5"
+                        TextWrapping="Wrap"
+                        IsTextSelectionEnabled="True" />
+                    <TextBlock
+                        Text="数据与备份目录"
+                        FontSize="12"
+                        Margin="0,6,0,0"
+                        Foreground="{ThemeResource TextFillColorTertiaryBrush}" />
+                    <TextBlock
+                        Text="{x:Bind Vm.DataRoot, Mode=OneWay}"
+                        FontSize="12.5"
+                        TextWrapping="Wrap"
+                        IsTextSelectionEnabled="True" />
+                </StackPanel>
+            </Border>
 
             <InfoBar
                 IsOpen="{x:Bind Vm.HasError, Mode=OneWay}"
@@ -46,10 +78,9 @@
                 Orientation="Horizontal"
                 HorizontalAlignment="Center"
                 Spacing="10"
-                Visibility="{x:Bind local:UiConverters.ToVisibility(Vm.IsFailed), Mode=OneWay}">
-                <Button Content="重试" Click="OnRetryClick" Style="{StaticResource AccentButtonStyle}" />
+                Visibility="{x:Bind local:UiConverters.ToVisibility(Vm.IsActionable), Mode=OneWay}">
+                <Button Content="{x:Bind Vm.PrimaryActionText, Mode=OneWay}" Click="OnRetryClick" Style="{StaticResource AccentButtonStyle}" />
                 <Button Content="选择种子包…" Click="OnPickSeedClick" Visibility="{x:Bind local:UiConverters.ToVisibility(Vm.CanPickSeed), Mode=OneWay}" />
-                <Button Content="在线初始化" Click="OnOnlineInitClick" />
             </StackPanel>
         </StackPanel>
     </Grid>

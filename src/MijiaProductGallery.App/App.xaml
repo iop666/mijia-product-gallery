@@ -20,6 +20,16 @@
                 <Setter Property="BorderBrush" Value="{ThemeResource CardStrokeColorDefaultBrush}" />
                 <Setter Property="BorderThickness" Value="1" />
             </Style>
+            <!-- 顶部悬浮提示的统一外观：InfoBar 自身背景随严重级别带透明度，
+                 叠在卡片或图片上会看不清，因此实底放在外层 Border。 -->
+            <Style x:Key="NoticeHostStyle" TargetType="Border">
+                <Setter Property="Background" Value="{ThemeResource SolidBackgroundFillColorBaseBrush}" />
+                <Setter Property="CornerRadius" Value="4" />
+            </Style>
+            <Style x:Key="NoticeInfoBarStyle" TargetType="InfoBar">
+                <Setter Property="Background" Value="Transparent" />
+                <Setter Property="AutomationProperties.LiveSetting" Value="Polite" />
+            </Style>
         </ResourceDictionary>
     </Application.Resources>
 </Application>

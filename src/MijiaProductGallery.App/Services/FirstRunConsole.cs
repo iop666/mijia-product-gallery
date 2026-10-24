@@ -28,7 +28,10 @@ public enum FirstRunConsoleResult
 /// </summary>
 public static class FirstRunConsole
 {
-    public static async Task<FirstRunConsoleResult> RunAsync(IFirstRunInitializer initializer, ISyncService syncService)
+    public static async Task<FirstRunConsoleResult> RunAsync(
+        IFirstRunInitializer initializer,
+        ISyncService syncService,
+        IAppDataRoot dataRoot)
     {
         if (!ConsoleNative.AllocConsole())
         {
@@ -37,7 +40,7 @@ public static class FirstRunConsole
 
         try
         {
-            return await RunCoreAsync(initializer, syncService);
+            return await RunCoreAsync(initializer, syncService, dataRoot);
         }
         finally
         {
@@ -45,7 +48,10 @@ public static class FirstRunConsole
         }
     }
 
-    private static async Task<FirstRunConsoleResult> RunCoreAsync(IFirstRunInitializer initializer, ISyncService syncService)
+    private static async Task<FirstRunConsoleResult> RunCoreAsync(
+        IFirstRunInitializer initializer,
+        ISyncService syncService,
+        IAppDataRoot dataRoot)
     {
         ConsoleNative.SetConsoleOutputCP(65001);
         DisableQuickEdit();
@@ -53,7 +59,7 @@ public static class FirstRunConsole
         Console.SetOut(new StreamWriter(Console.OpenStandardOutput(), new UTF8Encoding(false)) { AutoFlush = true });
 
         var renderer = new Renderer();
-        renderer.WriteHeader();
+        renderer.WriteHeader(dataRoot);
 
         void OnEngineProgress(SyncProgress progress) => renderer.OnSyncProgress(progress);
         syncService.ProgressChanged += OnEngineProgress;
@@ -113,7 +119,7 @@ public static class FirstRunConsole
             Console.Out.WriteLine(text);
         }
 
-        public void WriteHeader()
+        public void WriteHeader(IAppDataRoot dataRoot)
         {
             WriteLine("======================================================================");
             WriteLine("  米家产品示例图库 · 首次启动初始化");
@@ -121,8 +127,14 @@ public static class FirstRunConsole
             WriteLine("  数据来源：米家百科公开产品库（只读，不修改官网数据）");
             WriteLine("  预计获取：产品 10,000+ 个 · 示例样图 10,000+ 张");
             WriteLine("  预计耗时：约 5-15 分钟（取决于网络速度），请耐心等待");
+            WriteLine(string.Empty);
+            WriteLine("  图片下载目录：");
+            Foreground(ConsoleColor.Cyan, () => WriteLine($"    {dataRoot.ImagesDirectory}"));
+            WriteLine("  数据与备份目录：");
+            Foreground(ConsoleColor.Cyan, () => WriteLine($"    {dataRoot.RootPath}"));
+            WriteLine(string.Empty);
             WriteLine("  说明：加载期间不显示应用界面，完成后自动进入图库。");
-            WriteLine("        请勿关闭本窗口，关闭会中止本次初始化（重新启动应用可继续）。");
+            WriteLine("        请勿关闭本窗口，关闭会中止本次初始化；再次打开应用可手动继续。");
             WriteLine("======================================================================");
         }
 

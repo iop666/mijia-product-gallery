@@ -9,6 +9,9 @@ namespace MijiaProductGallery.ViewModels;
 /// <summary>初始化页状态。</summary>
 public enum InitializationUiState
 {
+    /// <summary>等待用户选择初始化方式（关闭页面/重启后不自动重跑）。</summary>
+    Idle,
+
     /// <summary>初始化进行中。</summary>
     Running,
 
@@ -26,28 +29,42 @@ public enum InitializationUiState
 public partial class InitializationViewModel : ObservableObject
 {
     private readonly IFirstRunInitializer initializer;
+    private bool runInProgress;
 
-    public InitializationViewModel(IFirstRunInitializer initializer)
+    public InitializationViewModel(IFirstRunInitializer initializer, IAppDataRoot? dataRoot = null)
     {
         this.initializer = initializer;
+        DataRoot = dataRoot?.RootPath ?? string.Empty;
+        ImagesDirectory = dataRoot?.ImagesDirectory ?? string.Empty;
     }
 
     /// <summary>初始化成功后触发（UI 侧跳转图库）。</summary>
     public event Action? Succeeded;
 
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(IsFailed), nameof(HasError))]
-    private InitializationUiState state = InitializationUiState.Running;
+    /// <summary>数据根目录（含数据库、原图、缩略图与备份）。</summary>
+    public string DataRoot { get; }
+
+    /// <summary>原图下载目录。</summary>
+    public string ImagesDirectory { get; }
 
     [ObservableProperty]
-    private string stageText = "正在准备…";
+    [NotifyPropertyChangedFor(
+        nameof(IsIdle),
+        nameof(IsFailed),
+        nameof(HasError),
+        nameof(IsActionable),
+        nameof(PrimaryActionText))]
+    private InitializationUiState state = InitializationUiState.Idle;
+
+    [ObservableProperty]
+    private string stageText = "尚未开始初始化，请选择一种方式继续。";
 
     [ObservableProperty]
     private double progressValue;
 
     /// <summary>进度不确定（如读取数据库、在线同步）时进度条为流动态。</summary>
     [ObservableProperty]
-    private bool isIndeterminate = true;
+    private bool isIndeterminate;
 
     [ObservableProperty]
     private string? errorMessage;
@@ -58,18 +75,52 @@ public partial class InitializationViewModel : ObservableObject
     [ObservableProperty]
     private bool canPickSeed;
 
+    /// <summary>等待用户启动的可见性。</summary>
+    public bool IsIdle => State == InitializationUiState.Idle;
+
     /// <summary>失败态可见性（供 x:Bind 直绑）。</summary>
     public bool IsFailed => State == InitializationUiState.Failed;
 
     /// <summary>是否存在错误信息（供 InfoBar 直绑）。</summary>
     public bool HasError => State == InitializationUiState.Failed && ErrorMessage is not null;
 
+    /// <summary>是否显示初始化方式按钮（等待启动或失败）。</summary>
+    public bool IsActionable => State is InitializationUiState.Idle or InitializationUiState.Failed;
+
+    /// <summary>主按钮文案：首次启动用“开始初始化”，失败后用“重试”。</summary>
+    public string PrimaryActionText => State == InitializationUiState.Idle ? "开始初始化" : "重试";
+
+    /// <summary>页面重新打开或应用重启后回到待启动状态：不自动重跑，保留用户选择权。</summary>
+    public void MarkPending(string message)
+    {
+        if (runInProgress)
+        {
+            return;
+        }
+
+        State = InitializationUiState.Idle;
+        StageText = message;
+        ProgressValue = 0;
+        IsIndeterminate = false;
+        ErrorMessage = null;
+        AvailableActions = ["retry", "check-seed", "online-init"];
+        CanPickSeed = true;
+    }
+
     /// <summary>执行初始化。explicitSeedPath 非空时跳过自动查找。</summary>
     public async Task RunAsync(string? explicitSeedPath = null, CancellationToken cancellationToken = default)
     {
+        // 单飞：重复点击、页面重新加载都不会叠加第二次全量初始化。
+        if (runInProgress)
+        {
+            return;
+        }
+
+        runInProgress = true;
         State = InitializationUiState.Running;
         ErrorMessage = null;
         AvailableActions = [];
+        CanPickSeed = false;
         IsIndeterminate = true;
         StageText = "正在检查本地数据库…";
         try
@@ -99,6 +150,10 @@ public partial class InitializationViewModel : ObservableObject
         catch (Exception exception)
         {
             ShowFailure(exception.Message, ["retry", "check-seed", "online-init"]);
+        }
+        finally
+        {
+            runInProgress = false;
         }
     }
 

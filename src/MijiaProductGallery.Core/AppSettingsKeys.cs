@@ -11,8 +11,10 @@ public static class AppSettingsKeys
     public const string ThumbMaxEdge = "Library.ThumbMaxEdge";
     public const string ThumbQuality = "Library.ThumbQuality";
 
-    // 常规（首启声明）
+    // 常规（首启声明与一次性提示）
     public const string LicenseAgreed = "General.LicenseAgreed";
+    public const string InitializationStarted = "General.InitializationStarted";
+    public const string DragHintSeen = "General.DragHintSeen";
 
     // 图库（浏览模式与分页）
     public const string GalleryBrowseMode = "Gallery.BrowseMode";
