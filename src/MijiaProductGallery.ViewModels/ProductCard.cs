@@ -61,6 +61,7 @@ public partial class ProductCard : ObservableObject
     public bool HasImage { get; }
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ShowFavoriteBadge))]
     private bool isFavorite;
 
     [ObservableProperty]
@@ -72,6 +73,11 @@ public partial class ProductCard : ObservableObject
 
     /// <summary>该卡片是否已请求过加载（避免重复入队）。</summary>
     internal bool LoadRequested { get; set; }
+
+    /// <summary>已入队尝试次数：原图缺失时避免每次滚回视口都重新解码。</summary>
+    internal int LoadAttempts { get; set; }
+
+    internal const int MaxLoadAttempts = 3;
 
     internal string? LoadKey => ImageFileName is null || Sha256 is null ? null : ImageFileName + "|" + Sha256;
 

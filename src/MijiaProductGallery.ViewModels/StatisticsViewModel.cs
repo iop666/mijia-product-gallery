@@ -8,11 +8,23 @@ namespace MijiaProductGallery.ViewModels;
 public partial class StatisticsViewModel : ObservableObject
 {
     private readonly IUsageStatisticsService statisticsService;
+    private bool loading;
 
     public StatisticsViewModel(IUsageStatisticsService statisticsService)
     {
         this.statisticsService = statisticsService;
     }
+
+    /// <summary>首次数据尚未返回时为 true（页面显示进度环，避免闪出全 0）。</summary>
+    [ObservableProperty]
+    private bool isLoading;
+
+    /// <summary>加载失败信息；null 表示正常。</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasError))]
+    private string? errorMessage;
+
+    public bool HasError => ErrorMessage is not null;
 
     [ObservableProperty]
     private long todayCount;
@@ -55,19 +67,42 @@ public partial class StatisticsViewModel : ObservableObject
     /// <summary>刷新统计（进入页面或请求刷新时调用）。</summary>
     public async Task LoadAsync(CancellationToken cancellationToken = default)
     {
-        var statistics = await statisticsService.GetStatisticsAsync(cancellationToken: cancellationToken);
-        TodayCount = statistics.TodayCount;
-        WeekCount = statistics.WeekCount;
-        MonthCount = statistics.MonthCount;
-        TotalCount = statistics.TotalCount;
-        TopProducts = statistics.TopProducts;
-        OnPropertyChanged(nameof(TopProductsEmpty));
+        if (loading)
+        {
+            return;
+        }
 
-        var overview = await statisticsService.GetGalleryOverviewAsync(cancellationToken);
-        GalleryTotalCount = overview.TotalCount;
-        GalleryWithImageCount = overview.WithImageCount;
-        GalleryWithoutImageCount = overview.WithoutImageCount;
-        GalleryRemovedCount = overview.RemovedCount;
-        CategoryStats = overview.Categories;
+        loading = true;
+        IsLoading = true;
+        ErrorMessage = null;
+        try
+        {
+            var statistics = await statisticsService.GetStatisticsAsync(cancellationToken: cancellationToken);
+            TodayCount = statistics.TodayCount;
+            WeekCount = statistics.WeekCount;
+            MonthCount = statistics.MonthCount;
+            TotalCount = statistics.TotalCount;
+            TopProducts = statistics.TopProducts;
+            OnPropertyChanged(nameof(TopProductsEmpty));
+
+            var overview = await statisticsService.GetGalleryOverviewAsync(cancellationToken);
+            GalleryTotalCount = overview.TotalCount;
+            GalleryWithImageCount = overview.WithImageCount;
+            GalleryWithoutImageCount = overview.WithoutImageCount;
+            GalleryRemovedCount = overview.RemovedCount;
+            CategoryStats = overview.Categories;
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        catch (Exception exception)
+        {
+            ErrorMessage = $"统计数据加载失败：{exception.Message}";
+        }
+        finally
+        {
+            loading = false;
+            IsLoading = false;
+        }
     }
 }

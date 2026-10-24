@@ -5,10 +5,21 @@ using MijiaProductGallery.Core.Models;
 namespace MijiaProductGallery.Infrastructure.Database.Repositories;
 
 /// <summary>搜索历史仓储（用户数据）。同查询合并刷新，超过上限删除最旧。</summary>
-public sealed class SearchHistoryRepository(GalleryDbContext context) : ISearchHistoryRepository
+public sealed class SearchHistoryRepository : ISearchHistoryRepository
 {
+    private readonly GalleryDbContext? shared;
+    private readonly IDbContextFactory<GalleryDbContext>? factory;
+
+    public SearchHistoryRepository(GalleryDbContext context) => shared = context;
+
+    public SearchHistoryRepository(IDbContextFactory<GalleryDbContext> factory) => this.factory = factory;
+
+    private DbContextScope Rent() => new(factory, shared);
+
     public async Task AddAsync(string query, long createdUnix, int resultCount, CancellationToken cancellationToken = default)
     {
+        await using var scope = Rent();
+        var context = scope.Context;
         var existing = await context.SearchHistories
             .FirstOrDefaultAsync(h => h.Query == query, cancellationToken);
         if (existing is not null)
@@ -23,12 +34,13 @@ public sealed class SearchHistoryRepository(GalleryDbContext context) : ISearchH
             ResultCount = resultCount,
         });
         await context.SaveChangesAsync(cancellationToken);
-        await TrimToLimitAsync(cancellationToken);
+        await TrimToLimitAsync(context, cancellationToken);
     }
 
     public async Task<IReadOnlyList<SearchHistoryEntry>> GetRecentAsync(int limit, CancellationToken cancellationToken = default)
     {
-        return await context.SearchHistories
+        await using var scope = Rent();
+        return await scope.Context.SearchHistories
             .AsNoTracking()
             .OrderByDescending(h => h.CreatedUnix)
             .ThenByDescending(h => h.Id)
@@ -38,10 +50,11 @@ public sealed class SearchHistoryRepository(GalleryDbContext context) : ISearchH
 
     public async Task ClearAsync(CancellationToken cancellationToken = default)
     {
-        await context.SearchHistories.ExecuteDeleteAsync(cancellationToken);
+        await using var scope = Rent();
+        await scope.Context.SearchHistories.ExecuteDeleteAsync(cancellationToken);
     }
 
-    private async Task TrimToLimitAsync(CancellationToken cancellationToken)
+    private static async Task TrimToLimitAsync(GalleryDbContext context, CancellationToken cancellationToken)
     {
         var overflowIds = await context.SearchHistories
             .OrderByDescending(h => h.CreatedUnix)

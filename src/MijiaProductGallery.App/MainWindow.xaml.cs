@@ -41,6 +41,15 @@ public sealed partial class MainWindow : Window
         SetTitleBar(TitleBarDragArea);
         ApplyTitleBarTheme(App.InitialTheme);
         ApplyRootBackground(App.InitialTheme);
+        // 跟随系统主题时，系统深浅色切换需要重算根底色与标题栏前景。
+        Nav.ActualThemeChanged += (_, _) =>
+        {
+            if (ThemeManager.CurrentTheme == AppSettingsKeys.ThemeDefault)
+            {
+                ApplyRootBackground(AppSettingsKeys.ThemeDefault);
+                ApplyTitleBarTheme(AppSettingsKeys.ThemeDefault);
+            }
+        };
         App.Services.GetRequiredService<SettingsViewModel>().ThemeChanged += OnThemeChanged;
         Nav.Loaded += OnLoaded;
         Nav.SizeChanged += OnNavSizeChanged;
@@ -51,14 +60,20 @@ public sealed partial class MainWindow : Window
     /// 不透明底色使接缝处不再透出启动时的深色/浅色窗口底。</summary>
     private void ApplyRootBackground(string theme)
     {
-        var argb = theme switch
-        {
-            "Dark" => 0xFF1C1C1C,
-            "Gray" => 0xFF3B3B3B,
-            _ => 0xFFFFFFFF,
-        };
+        var dark = IsDarkTheme(theme);
+        var argb = dark ? theme == "Gray" ? 0xFF3B3B3B : 0xFF1C1C1C : 0xFFFFFFFF;
         WindowGrid.Background = new Microsoft.UI.Xaml.Media.SolidColorBrush(Windows.UI.Color.FromArgb(
             (byte)(argb >> 24), (byte)(argb >> 16), (byte)(argb >> 8), (byte)argb));
+        TitleText.Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(dark
+            ? Windows.UI.Color.FromArgb(255, 240, 240, 240)
+            : Windows.UI.Color.FromArgb(255, 26, 26, 26));
+    }
+
+    /// <summary>系统主题（System）按根元素实际明暗判定；深色与灰色均为深色变体。</summary>
+    private bool IsDarkTheme(string theme)
+    {
+        return theme is "Dark" or "Gray"
+            || (theme == AppSettingsKeys.ThemeDefault && Nav.ActualTheme == ElementTheme.Dark);
     }
 
     /// <summary>窗口最小逻辑尺寸 900×600：过小时回弹到最小尺寸，保证布局稳定。</summary>
@@ -84,7 +99,7 @@ public sealed partial class MainWindow : Window
     private void ApplyTitleBarTheme(string theme)
     {
         var bar = AppWindow.TitleBar;
-        var dark = theme is "Dark" or "Gray";
+        var dark = IsDarkTheme(theme);
         bar.ForegroundColor = dark
             ? Windows.UI.Color.FromArgb(255, 240, 240, 240)
             : Windows.UI.Color.FromArgb(255, 26, 26, 26);
@@ -101,23 +116,51 @@ public sealed partial class MainWindow : Window
 
     private async void OnLoaded(object sender, RoutedEventArgs e)
     {
+        // 系统主题需在根元素完成主题解析后重算底色/标题栏（构造时 ActualTheme 尚为 Default）。
+        ApplyRootBackground(ThemeManager.CurrentTheme);
+        ApplyTitleBarTheme(ThemeManager.CurrentTheme);
         await RouteAsync();
     }
 
-    private async void OnSearchTextChanged(AutoSuggestBox sender, AutoSuggestBoxTextChangedEventArgs args)
+    /// <summary>输入即搜索：写入视图模型（500ms 防抖）；从其他页面输入时自动进入图库，
+    /// 避免“搜索框在设置页输入、结果却在看不见的图库页变化”。</summary>
+    private void OnSearchTextChanged(AutoSuggestBox sender, AutoSuggestBoxTextChangedEventArgs args)
     {
-        if (!args.CheckCurrent())
+        if (!args.CheckCurrent() || args.Reason != AutoSuggestionBoxTextChangeReason.UserInput)
         {
             return;
         }
 
         var vm = galleryViewModel ??= App.Services.GetRequiredService<GalleryViewModel>();
-        SearchBox.ItemsSource = await vm.GetSearchSuggestionsAsync(sender.Text);
+        if (ContentFrame.Content is not GalleryPage)
+        {
+            ShowGallery();
+        }
+
+        vm.SearchText = sender.Text ?? string.Empty;
+        _ = UpdateSearchSuggestionsAsync(vm, sender.Text ?? string.Empty);
+    }
+
+    private async Task UpdateSearchSuggestionsAsync(GalleryViewModel vm, string text)
+    {
+        try
+        {
+            SearchBox.ItemsSource = await vm.GetSearchSuggestionsAsync(text);
+        }
+        catch
+        {
+            // 建议读取失败不影响搜索本身。
+        }
     }
 
     private void OnSearchQuerySubmitted(AutoSuggestBox sender, AutoSuggestBoxQuerySubmittedEventArgs args)
     {
         var vm = galleryViewModel ??= App.Services.GetRequiredService<GalleryViewModel>();
+        if (ContentFrame.Content is not GalleryPage)
+        {
+            ShowGallery();
+        }
+
         vm.ApplySearchImmediate(args.QueryText ?? string.Empty);
     }
 
@@ -128,12 +171,23 @@ public sealed partial class MainWindow : Window
             Windows.System.VirtualKey.Control).HasFlag(Windows.UI.Core.CoreVirtualKeyStates.Down);
         if (ctrlDown && e.Key == Windows.System.VirtualKey.F)
         {
-            SearchBox.Focus(FocusState.Keyboard);
             e.Handled = true;
+            if (!Nav.IsPaneOpen)
+            {
+                // 折叠态下搜索框不在可视树，先展开再聚焦（等面板完成布局）。
+                Nav.IsPaneOpen = true;
+                DispatcherQueue.TryEnqueue(
+                    Microsoft.UI.Dispatching.DispatcherQueuePriority.Low,
+                    () => SearchBox.Focus(FocusState.Keyboard));
+                return;
+            }
+
+            SearchBox.Focus(FocusState.Keyboard);
         }
     }
 
-    /// <summary>搜索关键字在视图模型侧被清除（Chip 删除/清除全部）时同步输入框文本。</summary>
+    /// <summary>搜索关键字在视图模型侧被清除（Chip 删除/清除全部）时同步输入框文本；
+    /// 视图模式变化（收藏 chip 删除、最近使用切回图库等）时同步左侧导航高亮。</summary>
     private void OnGalleryPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
         if (e.PropertyName == nameof(GalleryViewModel.SearchText))
@@ -145,6 +199,23 @@ public sealed partial class MainWindow : Window
                 {
                     SearchBox.Text = text;
                 }
+            });
+        }
+        else if (e.PropertyName == nameof(GalleryViewModel.Mode))
+        {
+            DispatcherQueue.TryEnqueue(() =>
+            {
+                if (ContentFrame.Content is not GalleryPage page)
+                {
+                    return;
+                }
+
+                SelectNavItem(page.Vm.Mode switch
+                {
+                    GalleryMode.Favorites => "favorites",
+                    GalleryMode.Recent => "recent",
+                    _ => "gallery",
+                });
             });
         }
     }
@@ -178,6 +249,8 @@ public sealed partial class MainWindow : Window
 
         var products = App.Services.GetRequiredService<IProductRepository>();
         var hasProducts = await products.CountAsync() > 0;
+        var launchView = await settingsRepository.GetValueAsync(
+            AppSettingsKeys.LaunchView, AppSettingsKeys.LaunchViewDefault);
         if (!hasProducts)
         {
             // 首次初始化（空库）：抓取期间不展示可操作 GUI，仅显示控制台加载窗口；
@@ -188,7 +261,7 @@ public sealed partial class MainWindow : Window
                 App.Services.GetRequiredService<ISyncService>());
             if (result == FirstRunConsoleResult.Succeeded)
             {
-                ShowGallery();
+                ShowLaunchView(launchView);
             }
             else
             {
@@ -197,7 +270,7 @@ public sealed partial class MainWindow : Window
         }
         else
         {
-            ShowGallery();
+            ShowLaunchView(launchView);
         }
 
         StartAutoSyncScheduler();
@@ -256,6 +329,7 @@ public sealed partial class MainWindow : Window
         var dialog = new ContentDialog
         {
             XamlRoot = Nav.XamlRoot,
+            RequestedTheme = ThemeManager.ToElementTheme(ThemeManager.CurrentTheme),
             Title = "使用条款与免责声明",
             Content = content,
             PrimaryButtonText = "同意并继续",
@@ -272,8 +346,13 @@ public sealed partial class MainWindow : Window
         DispatcherQueue.TryEnqueue(() => _ = ApplyThemeLiveAsync(theme));
     }
 
+    private int themeGeneration;
+
     private async Task ApplyThemeLiveAsync(string theme)
     {
+        // 快速连选时只让最后一次生效，避免旧任务在延迟后覆盖新选择。
+        var generation = ++themeGeneration;
+        ThemeManager.CurrentTheme = theme;
         try
         {
             // 不透明根底色先行：任何后续步骤异常都保证接缝不透窗口底色。
@@ -286,6 +365,11 @@ public sealed partial class MainWindow : Window
                 Nav.RequestedTheme = target == ElementTheme.Dark ? ElementTheme.Light : ElementTheme.Dark;
                 ThemePalette.Apply(theme);
                 await Task.Delay(60);
+                if (generation != themeGeneration)
+                {
+                    return;
+                }
+
                 Nav.RequestedTheme = target;
             }
             else
@@ -294,13 +378,29 @@ public sealed partial class MainWindow : Window
                 Nav.RequestedTheme = target;
             }
 
+            if (generation != themeGeneration)
+            {
+                return;
+            }
+
             SearchBox.RequestedTheme = target;
-            ThemeManager.CurrentTheme = theme;
+            // 跟随系统时 RequestedTheme=Default：按解析后的实际主题补齐根底色。
+            if (theme == AppSettingsKeys.ThemeDefault)
+            {
+                ApplyRootBackground(theme);
+                ApplyTitleBarTheme(theme);
+            }
         }
         catch (Exception exception)
         {
+            if (generation != themeGeneration)
+            {
+                return;
+            }
+
             // 主题切换失败回滚到安全状态：仅根底色与元素主题，避免半更新。
             ApplyRootBackground(theme);
+            ApplyTitleBarTheme(theme);
             Nav.RequestedTheme = ThemeManager.ToElementTheme(theme);
             LogThemeError(exception);
         }
@@ -322,6 +422,14 @@ public sealed partial class MainWindow : Window
         }
     }
 
+    /// <summary>按设置中的“启动视图”进入图库/收藏/最近使用。</summary>
+    private void ShowLaunchView(string launchView)
+    {
+        ShowGallery(
+            favorites: launchView == "Favorites",
+            recent: launchView == "Recent");
+    }
+
     /// <summary>显示全部产品图库（供收藏空状态"浏览图库"等入口调用）。</summary>
     public void ShowGallery(bool favorites = false, bool recent = false)
     {
@@ -335,17 +443,14 @@ public sealed partial class MainWindow : Window
         {
             galleryViewModel.EnterRecentMode();
         }
+        else if (favorites)
+        {
+            galleryViewModel.EnterFavoritesMode();
+        }
         else
         {
             galleryViewModel.ExitRecentMode();
-            if (favorites)
-            {
-                galleryViewModel.EnterFavoritesMode();
-            }
-            else
-            {
-                galleryViewModel.ExitFavoritesMode();
-            }
+            galleryViewModel.ExitFavoritesMode();
         }
 
         galleryPage ??= new GalleryPage(galleryViewModel);
@@ -353,6 +458,9 @@ public sealed partial class MainWindow : Window
         ContentFrame.Content = galleryPage;
         SelectNavItem(recent ? "recent" : favorites ? "favorites" : "gallery");
     }
+
+    /// <summary>供空图库等空状态入口跳转到初始化页。</summary>
+    public void ShowInitializationPage() => ShowInitialization();
 
     private void ShowInitialization()
     {

@@ -2,16 +2,25 @@ using Microsoft.EntityFrameworkCore;
 using MijiaProductGallery.Core.Enums;
 using MijiaProductGallery.Core.Interfaces;
 using MijiaProductGallery.Core.Models;
-using MijiaProductGallery.Infrastructure.Database;
 
 namespace MijiaProductGallery.Infrastructure.Database.Repositories;
 
 /// <summary>
 /// 最近使用视图服务：UsageEvents 按产品聚合 MAX(UsedUnix) 数据库侧排序，
-/// 时间并列时按型号次序稳定排序；最近事件类型与产品行二次查询补齐。
+/// 时间并列时按型号次序稳定排序；产品行与最近事件按批补齐，避免逐条往返。
+/// 应用内每次调用使用独立上下文。
 /// </summary>
-public sealed class RecentService(GalleryDbContext context) : IRecentService
+public sealed class RecentService : IRecentService
 {
+    private readonly GalleryDbContext? shared;
+    private readonly IDbContextFactory<GalleryDbContext>? factory;
+
+    public RecentService(GalleryDbContext context) => shared = context;
+
+    public RecentService(IDbContextFactory<GalleryDbContext> factory) => this.factory = factory;
+
+    private DbContextScope Rent() => new(factory, shared);
+
     /// <summary>
     /// 分页获取最近使用：跳过/取行在数据库侧完成（Skip/Take 聚合查询），
     /// 仅当前页补齐事件类型与产品行；总产品数数据库侧 COUNT(DISTINCT)。
@@ -20,6 +29,9 @@ public sealed class RecentService(GalleryDbContext context) : IRecentService
     {
         skip = Math.Max(0, skip);
         take = Math.Max(1, take);
+
+        await using var scope = Rent();
+        var context = scope.Context;
 
         var totalCount = await context.UsageEvents
             .Select(e => e.ProductId)
@@ -34,30 +46,10 @@ public sealed class RecentService(GalleryDbContext context) : IRecentService
             .Take(take)
             .ToListAsync(cancellationToken);
 
-        var items = new List<RecentProduct>(grouped.Count);
-        foreach (var g in grouped)
-        {
-            var product = await context.Products.AsNoTracking()
-                .FirstOrDefaultAsync(p => p.Id == g.ProductId, cancellationToken);
-            if (product is null)
-            {
-                continue;
-            }
-
-            var lastEvent = await context.UsageEvents
-                .AsNoTracking()
-                .Where(e => e.ProductId == g.ProductId && e.UsedUnix == g.LastUsedUnix)
-                .OrderByDescending(e => e.Id)
-                .Select(e => (UsageType?)e.Type)
-                .FirstOrDefaultAsync(cancellationToken) ?? UsageType.View;
-            items.Add(new RecentProduct
-            {
-                Product = product,
-                LastUsedUnix = g.LastUsedUnix,
-                LastEvent = lastEvent,
-            });
-        }
-
+        var aggregates = grouped
+            .Select(g => new RecentAggregate(g.ProductId, g.LastUsedUnix))
+            .ToList();
+        var items = await MaterializeAsync(context, aggregates, cancellationToken);
         return new RecentPageResult(items, totalCount);
     }
 
@@ -65,73 +57,83 @@ public sealed class RecentService(GalleryDbContext context) : IRecentService
     {
         limit = Math.Max(1, limit);
 
-        // 聚合在数据库侧完成；时间并列时按型号次序稳定排序（内存内对已聚合的小集合执行）。
+        await using var scope = Rent();
+        var context = scope.Context;
+
+        // 聚合在数据库侧完成；多取一段以覆盖同秒并列后按型号排序的情况。
         var grouped = await context.UsageEvents
             .GroupBy(e => e.ProductId)
             .Select(g => new { ProductId = g.Key, LastUsedUnix = g.Max(e => e.UsedUnix) })
+            .OrderByDescending(g => g.LastUsedUnix)
+            .Take(limit * 2)
             .ToListAsync(cancellationToken);
-        var productsById = await context.Products
+
+        var aggregates = grouped
+            .Select(g => new RecentAggregate(g.ProductId, g.LastUsedUnix))
+            .ToList();
+        var items = await MaterializeAsync(context, aggregates, cancellationToken);
+        return items
+            .OrderByDescending(item => item.LastUsedUnix)
+            .ThenBy(item => item.Product.Model, StringComparer.Ordinal)
+            .Take(limit)
+            .ToList();
+    }
+
+    /// <summary>按批取产品行与每产品最近事件，保持传入聚合顺序。</summary>
+    private static async Task<List<RecentProduct>> MaterializeAsync(
+        GalleryDbContext context,
+        IReadOnlyList<RecentAggregate> aggregates,
+        CancellationToken cancellationToken)
+    {
+        if (aggregates.Count == 0)
+        {
+            return [];
+        }
+
+        var ids = aggregates.Select(a => a.ProductId).Distinct().ToList();
+        var products = await context.Products
             .AsNoTracking()
+            .Where(p => ids.Contains(p.Id))
             .ToDictionaryAsync(p => p.Id, p => p, cancellationToken);
 
-        grouped.Sort((left, right) =>
+        var events = await context.UsageEvents
+            .AsNoTracking()
+            .Where(e => ids.Contains(e.ProductId))
+            .OrderByDescending(e => e.UsedUnix)
+            .ThenByDescending(e => e.Id)
+            .ToListAsync(cancellationToken);
+        var lastByProduct = new Dictionary<int, UsageType>();
+        foreach (var usageEvent in events)
         {
-            var byTime = right.LastUsedUnix.CompareTo(left.LastUsedUnix);
-            if (byTime != 0)
-            {
-                return byTime;
-            }
+            lastByProduct.TryAdd(usageEvent.ProductId, usageEvent.Type);
+        }
 
-            var leftModel = productsById.GetValueOrDefault(left.ProductId)?.Model ?? string.Empty;
-            var rightModel = productsById.GetValueOrDefault(right.ProductId)?.Model ?? string.Empty;
-            return string.CompareOrdinal(leftModel, rightModel);
-        });
-
-        var result = new List<RecentProduct>(limit);
-        foreach (var g in grouped)
+        var result = new List<RecentProduct>(aggregates.Count);
+        foreach (var aggregate in aggregates)
         {
-            if (!productsById.TryGetValue(g.ProductId, out var product))
+            if (!products.TryGetValue(aggregate.ProductId, out var product))
             {
                 continue;
             }
 
-            var lastEvent = await LastEventTypeAsync(g.ProductId, g.LastUsedUnix, cancellationToken);
             result.Add(new RecentProduct
             {
                 Product = product,
-                LastUsedUnix = g.LastUsedUnix,
-                LastEvent = lastEvent,
+                LastUsedUnix = aggregate.LastUsedUnix,
+                LastEvent = lastByProduct.GetValueOrDefault(product.Id, UsageType.View),
             });
-
-            if (result.Count >= limit)
-            {
-                break;
-            }
         }
 
         return result;
     }
 
-    /// <summary>取产品在指定时间点的最近一次事件类型（同秒并列时取 Id 最大的一条）。</summary>
-    private async Task<UsageType> LastEventTypeAsync(
-        int productId,
-        long usedUnix,
-        CancellationToken cancellationToken)
-    {
-        var last = await context.UsageEvents
-            .AsNoTracking()
-            .Where(e => e.ProductId == productId && e.UsedUnix == usedUnix)
-            .OrderByDescending(e => e.Id)
-            .Select(e => (UsageType?)e.Type)
-            .FirstOrDefaultAsync(cancellationToken);
-        return last ?? UsageType.View;
-    }
+    private sealed record RecentAggregate(int ProductId, long LastUsedUnix);
 
     public async Task ClearHistoryAsync(CancellationToken cancellationToken = default)
     {
+        await using var scope = Rent();
+        var context = scope.Context;
         await context.UsageEvents.ExecuteDeleteAsync(cancellationToken);
         await context.ProductUsages.ExecuteDeleteAsync(cancellationToken);
-        await context.SaveChangesAsync(cancellationToken);
     }
 }
-

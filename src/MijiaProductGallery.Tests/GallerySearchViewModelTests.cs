@@ -130,7 +130,8 @@ public sealed class GallerySearchViewModelTests : IAsyncLifetime
         vm.SearchText = "米";
         vm.SearchText = "zzz-no-match";
 
-        Assert.True(await WaitForAsync(() => vm.ResultSummary == "没有找到相关产品"));
+        Assert.True(await WaitForAsync(() => vm.IsNoResultsVisible));
+        Assert.Null(vm.ResultSummary);
         Assert.Empty(vm.Cards);
         var historyRepository = new SearchHistoryRepository(host.CreateContext());
         Assert.True(await WaitForAsync(
@@ -150,14 +151,42 @@ public sealed class GallerySearchViewModelTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task NoMatch_ShowsNotFoundSummary()
+    public async Task EnterRecentMode_KeepsRecentMode_AfterProgrammaticFilterReset()
+    {
+        var vm = CreateViewModel();
+        await vm.LoadAsync();
+
+        vm.EnterRecentMode();
+
+        Assert.True(vm.IsRecentMode);
+        Assert.True(await WaitForAsync(() => vm.IsNoResultsVisible));
+        // 空状态由居中面板表达，摘要不再重复"暂无使用记录"。
+        Assert.Null(vm.ResultSummary);
+    }
+
+    [Fact]
+    public async Task ClearAllFilters_ExitsRandomMode()
+    {
+        var vm = CreateViewModel();
+        await vm.LoadAsync();
+        vm.EnterRandomMode();
+        Assert.True(vm.IsRandomMode);
+
+        vm.ClearAllFilters();
+
+        Assert.False(vm.IsRandomMode);
+    }
+
+    [Fact]
+    public async Task NoMatch_ShowsNoResultsStateWithoutSummary()
     {
         var vm = CreateViewModel();
         await vm.LoadAsync();
 
         vm.ApplySearchImmediate("zzz-no-match");
 
-        Assert.True(await WaitForAsync(() => vm.ResultSummary == "没有找到相关产品"));
+        Assert.True(await WaitForAsync(() => vm.IsNoResultsVisible));
+        Assert.Null(vm.ResultSummary);
         // 查询无结果不再等于"图库为空"：Empty 仅表示数据库无产品。
         Assert.Equal(GalleryLoadState.Ready, vm.State);
         Assert.False(vm.IsEmptyVisible);

@@ -1,3 +1,4 @@
+using System.Reflection;
 using CommunityToolkit.Mvvm.ComponentModel;
 using MijiaProductGallery.Core;
 using MijiaProductGallery.Core.Enums;
@@ -11,13 +12,22 @@ public partial class SettingsViewModel : ObservableObject
 {
     private readonly ISettingsRepository settings;
     private readonly IRecentService? recentService;
+    private readonly object writeLock = new();
+    private Task writeChain = Task.CompletedTask;
+    private bool loading;
+
     public SettingsViewModel(
         ISettingsRepository settings,
-        IRecentService? recentService = null)
+        IRecentService? recentService = null,
+        IAppDataRoot? dataRoot = null)
     {
         this.settings = settings;
         this.recentService = recentService;
+        DataRoot = dataRoot?.RootPath ?? string.Empty;
     }
+
+    /// <summary>设置持久化失败（界面提示，不中断操作）。</summary>
+    public event Action<string>? SaveFailed;
 
     /// <summary>主题变更事件（App 层订阅并应用到根视觉树）。</summary>
     public event Action<string>? ThemeChanged;
@@ -63,28 +73,55 @@ public partial class SettingsViewModel : ObservableObject
     [ObservableProperty]
     private bool recordDrags = true;
 
-    /// <summary>应用版本（来自程序集）。</summary>
-    public string AppVersion => "0.1.0";
+    /// <summary>应用版本（来自入口程序集的 InformationalVersion，去掉构建元数据后缀）。</summary>
+    public string AppVersion
+    {
+        get
+        {
+            var assembly = Assembly.GetEntryAssembly() ?? typeof(SettingsViewModel).Assembly;
+            var informational = assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion;
+            if (!string.IsNullOrWhiteSpace(informational))
+            {
+                var plus = informational.IndexOf('+');
+                return plus >= 0 ? informational[..plus] : informational;
+            }
+
+            return assembly.GetName().Version?.ToString(3) ?? "未知";
+        }
+    }
 
     /// <summary>数据源说明。</summary>
     public string DataSourceDescription => "米家百科公开产品库（home.mi.com）。图片版权归小米公司及相关厂商所有。";
 
     partial void OnThemeChanged(string value)
     {
-        _ = settings.SetValueAsync(AppSettingsKeys.Theme, value);
         ThemeChanged?.Invoke(value);
+        if (loading)
+        {
+            return;
+        }
+
+        QueueSave(AppSettingsKeys.Theme, value);
     }
 
     partial void OnLaunchViewChanged(string value)
     {
-        _ = settings.SetValueAsync(AppSettingsKeys.LaunchView, value);
+        if (!loading)
+        {
+            QueueSave(AppSettingsKeys.LaunchView, value);
+        }
     }
 
     partial void OnBrowseModeChanged(string value)
     {
-        _ = settings.SetValueAsync(AppSettingsKeys.GalleryBrowseMode, value);
         OnPropertyChanged(nameof(IsPagedBrowseMode));
+        if (loading)
+        {
+            return;
+        }
+
         BrowseModeChanged?.Invoke(value);
+        QueueSave(AppSettingsKeys.GalleryBrowseMode, value);
     }
 
     partial void OnPageSizeChanged(int value)
@@ -97,23 +134,76 @@ public partial class SettingsViewModel : ObservableObject
             return;
         }
 
-        _ = settings.SetValueAsync(AppSettingsKeys.GalleryPageSize, value);
+        if (loading)
+        {
+            return;
+        }
+
         PageSizeChanged?.Invoke(value);
+        QueueSave(AppSettingsKeys.GalleryPageSize, value);
     }
 
     partial void OnRecordViewsChanged(bool value)
     {
-        _ = settings.SetValueAsync(AppSettingsKeys.RecordViews, value);
+        if (!loading)
+        {
+            QueueSave(AppSettingsKeys.RecordViews, value);
+        }
     }
 
     partial void OnRecordCopiesChanged(bool value)
     {
-        _ = settings.SetValueAsync(AppSettingsKeys.RecordCopies, value);
+        if (!loading)
+        {
+            QueueSave(AppSettingsKeys.RecordCopies, value);
+        }
     }
 
     partial void OnRecordDragsChanged(bool value)
     {
-        _ = settings.SetValueAsync(AppSettingsKeys.RecordDrags, value);
+        if (!loading)
+        {
+            QueueSave(AppSettingsKeys.RecordDrags, value);
+        }
+    }
+
+    /// <summary>串行化设置写入：连续切换时后写覆盖先写，避免乱序落库。</summary>
+    private void QueueSave<T>(string key, T value)
+        where T : notnull
+    {
+        lock (writeLock)
+        {
+            // 无排队写入时直接发起，保留同步完成的实现（测试与本地 SQLite 都不引入额外线程跳转）。
+            writeChain = writeChain.IsCompleted
+                ? SaveCoreAsync(key, value)
+                : writeChain.ContinueWith(
+                    _ => SaveCoreAsync(key, value),
+                    CancellationToken.None,
+                    TaskContinuationOptions.None,
+                    TaskScheduler.Default).Unwrap();
+        }
+    }
+
+    private async Task SaveCoreAsync<T>(string key, T value)
+        where T : notnull
+    {
+        try
+        {
+            await settings.SetValueAsync(key, value);
+        }
+        catch (Exception exception)
+        {
+            SaveFailed?.Invoke($"设置保存失败：{exception.Message}");
+        }
+    }
+
+    /// <summary>等待已排队的设置写入完成（页面离开/应用退出前可调用）。</summary>
+    public Task FlushAsync()
+    {
+        lock (writeLock)
+        {
+            return writeChain;
+        }
     }
 
     /// <summary>清空最近使用记录（仅 UsageEvents/ProductUsages；收藏与搜索历史不受影响）。</summary>
@@ -128,13 +218,22 @@ public partial class SettingsViewModel : ObservableObject
     /// <summary>加载全部设置（页面进入时）。</summary>
     public async Task LoadAsync(CancellationToken cancellationToken = default)
     {
-        Theme = await settings.GetValueAsync(AppSettingsKeys.Theme, AppSettingsKeys.ThemeDefault, cancellationToken);
-        LaunchView = await settings.GetValueAsync(AppSettingsKeys.LaunchView, AppSettingsKeys.LaunchViewDefault, cancellationToken);
-        BrowseMode = await settings.GetValueAsync(AppSettingsKeys.GalleryBrowseMode, AppSettingsKeys.GalleryBrowseModeDefault, cancellationToken);
-        PageSize = await settings.GetValueAsync(AppSettingsKeys.GalleryPageSize, AppSettingsKeys.GalleryPageSizeDefault, cancellationToken);
-        RecordViews = await settings.GetValueAsync(AppSettingsKeys.RecordViews, true, cancellationToken);
-        RecordCopies = await settings.GetValueAsync(AppSettingsKeys.RecordCopies, true, cancellationToken);
-        RecordDrags = await settings.GetValueAsync(AppSettingsKeys.RecordDrags, true, cancellationToken);
+        // 回填阶段不触发持久化与图库重载事件：打开设置页只是读，不应写库或刷新图库。
+        loading = true;
+        try
+        {
+            Theme = await settings.GetValueAsync(AppSettingsKeys.Theme, AppSettingsKeys.ThemeDefault, cancellationToken);
+            LaunchView = await settings.GetValueAsync(AppSettingsKeys.LaunchView, AppSettingsKeys.LaunchViewDefault, cancellationToken);
+            BrowseMode = await settings.GetValueAsync(AppSettingsKeys.GalleryBrowseMode, AppSettingsKeys.GalleryBrowseModeDefault, cancellationToken);
+            PageSize = await settings.GetValueAsync(AppSettingsKeys.GalleryPageSize, AppSettingsKeys.GalleryPageSizeDefault, cancellationToken);
+            RecordViews = await settings.GetValueAsync(AppSettingsKeys.RecordViews, true, cancellationToken);
+            RecordCopies = await settings.GetValueAsync(AppSettingsKeys.RecordCopies, true, cancellationToken);
+            RecordDrags = await settings.GetValueAsync(AppSettingsKeys.RecordDrags, true, cancellationToken);
+        }
+        finally
+        {
+            loading = false;
+        }
     }
 
 }

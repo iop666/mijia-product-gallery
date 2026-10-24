@@ -28,6 +28,7 @@
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="*" />
                 <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
             </Grid.RowDefinitions>
 
             <!-- 工具行：结果摘要 + 操作区（随机/排序/筛选/清除） -->
@@ -76,20 +77,26 @@
                         Visibility="{Binding HasResultSummary, Mode=OneWay, Converter={StaticResource BoolToVisibility}}" />
                 </StackPanel>
                 <Button
+                    x:Name="RandomButton"
                     Grid.Column="1"
                     Click="OnRandomEnterClick"
-                    ToolTipService.ToolTip="随机浏览一批产品">
+                    AutomationProperties.Name="随机浏览"
+                    ToolTipService.ToolTip="随机浏览一批产品"
+                    Visibility="{x:Bind local:UiConverters.ToInverseVisibility(Vm.IsRecentMode), Mode=OneWay}">
                     <StackPanel Orientation="Horizontal" Spacing="6">
                         <FontIcon Glyph="&#xE8B1;" FontSize="14" />
                         <TextBlock Text="随机" />
                     </StackPanel>
                 </Button>
                 <Button
+                    x:Name="SortButton"
                     Grid.Column="2"
-                    ToolTipService.ToolTip="选择排序方式">
+                    AutomationProperties.Name="排序"
+                    ToolTipService.ToolTip="选择排序方式"
+                    Visibility="{x:Bind local:UiConverters.ToInverseVisibility(Vm.IsRecentMode), Mode=OneWay}">
                     <StackPanel Orientation="Horizontal" Spacing="6">
                         <FontIcon Glyph="&#xE8CB;" FontSize="14" />
-                        <TextBlock Text="排序" />
+                        <TextBlock Text="{x:Bind Vm.SortLabel, Mode=OneWay}" />
                         <FontIcon Glyph="&#xE70D;" FontSize="10" />
                     </StackPanel>
                     <Button.Flyout>
@@ -117,15 +124,19 @@
                     x:Name="FilterButton"
                     Grid.Column="3"
                     Click="OnFilterToggleClick"
-                    ToolTipService.ToolTip="打开/关闭筛选面板">
+                    AutomationProperties.Name="筛选"
+                    ToolTipService.ToolTip="打开/关闭筛选面板"
+                    Visibility="{x:Bind local:UiConverters.ToInverseVisibility(Vm.IsRecentMode), Mode=OneWay}">
                     <StackPanel Orientation="Horizontal" Spacing="6">
                         <FontIcon Glyph="&#xE71C;" FontSize="14" />
                         <TextBlock Text="筛选" />
                     </StackPanel>
                 </Button>
                 <Button
+                    x:Name="ClearFiltersButton"
                     Grid.Column="4"
                     Content="清除全部"
+                    AutomationProperties.Name="清除全部筛选"
                     Visibility="{Binding HasActiveChips, Mode=OneWay, Converter={StaticResource BoolToVisibility}}"
                     Click="OnClearFiltersClick" />
             </Grid>
@@ -210,9 +221,22 @@
                 </Grid>
             </Border>
 
+            <!-- 操作提示：位于卡片区与分页栏之间，不再遮挡翻页控件 -->
+            <InfoBar
+                Grid.Row="4"
+                x:Name="NoticeBar"
+                AutomationProperties.LiveSetting="Polite"
+                IsOpen="False"
+                IsClosable="True"
+                Severity="Informational"
+                Title="提示"
+                MaxWidth="720"
+                Margin="0,8,0,0"
+                HorizontalAlignment="Center" />
+
             <!-- 分页栏：固定内容区底部，不随卡片滚动；随机/连续滚动模式隐藏 -->
             <Border
-                Grid.Row="4"
+                Grid.Row="5"
                 Background="{ThemeResource ControlFillColorSecondaryBrush}"
                 BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
                 BorderThickness="1"
@@ -295,6 +319,34 @@
                     AutomationProperties.Name="浏览图库"
                     Click="OnBrowseGalleryClick" />
             </StackPanel>
+
+            <!-- 无结果空状态：搜索/筛选/最近使用均无数据时给出可执行出口 -->
+            <StackPanel
+                Grid.Row="3"
+                HorizontalAlignment="Center"
+                VerticalAlignment="Center"
+                Spacing="12"
+                Visibility="{x:Bind local:UiConverters.ToVisibility(Vm.IsNoResultsVisible), Mode=OneWay}">
+                <FontIcon
+                    Glyph="&#xE721;"
+                    FontSize="40"
+                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                    HorizontalAlignment="Center" />
+                <TextBlock
+                    Text="{x:Bind Vm.NoResultsText, Mode=OneWay}"
+                    FontSize="16"
+                    HorizontalAlignment="Center"
+                    TextAlignment="Center"
+                    TextWrapping="Wrap"
+                    MaxWidth="420" />
+                <Button
+                    Content="{x:Bind Vm.NoResultsActionText, Mode=OneWay}"
+                    Style="{StaticResource AccentButtonStyle}"
+                    HorizontalAlignment="Center"
+                    AutomationProperties.Name="{x:Bind Vm.NoResultsActionText, Mode=OneWay}"
+                    Visibility="{x:Bind local:UiConverters.ToVisibility(Vm.HasNoResultsAction), Mode=OneWay}"
+                    Click="OnNoResultsActionClick" />
+            </StackPanel>
         </Grid>
 
         <!-- 加载中 -->
@@ -308,19 +360,28 @@
             <TextBlock Text="正在加载图库…" HorizontalAlignment="Center" />
         </StackPanel>
 
-        <!-- 空图库 -->
+        <!-- 空图库：给出直达初始化页的出口，而不是只留一句说明 -->
         <StackPanel
             Grid.Column="0"
             HorizontalAlignment="Center"
             VerticalAlignment="Center"
-            Spacing="8"
+            Spacing="12"
             Visibility="{x:Bind local:UiConverters.ToVisibility(Vm.IsEmptyVisible), Mode=OneWay}">
             <FontIcon Glyph="&#xE8B9;" FontSize="40" Foreground="{ThemeResource TextFillColorSecondaryBrush}" HorizontalAlignment="Center" />
             <TextBlock Text="图库为空" HorizontalAlignment="Center" FontSize="18" />
             <TextBlock
-                Text="尚未导入任何产品。可返回初始化页导入种子数据或进行在线初始化。"
+                Text="尚未导入任何产品。可前往初始化页导入种子数据或进行在线初始化。"
                 Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                HorizontalAlignment="Center" />
+                HorizontalAlignment="Center"
+                TextAlignment="Center"
+                TextWrapping="Wrap"
+                MaxWidth="420" />
+            <Button
+                Content="前往初始化"
+                Style="{StaticResource AccentButtonStyle}"
+                HorizontalAlignment="Center"
+                AutomationProperties.Name="前往初始化"
+                Click="OnOpenInitializationClick" />
         </StackPanel>
 
         <!-- 加载失败 -->
@@ -340,19 +401,6 @@
                 MaxWidth="480" />
             <Button Content="重试" HorizontalAlignment="Center" Click="OnRetryClick" />
         </StackPanel>
-
-        <!-- 操作提示 -->
-        <InfoBar
-            Grid.Column="0"
-            x:Name="NoticeBar"
-            AutomationProperties.LiveSetting="Polite"
-            IsOpen="False"
-            IsClosable="True"
-            Severity="Informational"
-            Title="提示"
-            HorizontalAlignment="Center"
-            VerticalAlignment="Bottom"
-            Margin="0,0,0,24" />
 
         <!-- 筛选面板：独立标题行 + 内容区，不进入系统标题栏区域 -->
         <Border

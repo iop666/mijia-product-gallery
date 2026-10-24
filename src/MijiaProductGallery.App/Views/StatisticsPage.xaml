@@ -6,7 +6,22 @@
 
     <ScrollViewer Padding="24,16">
         <StackPanel Spacing="18" MaxWidth="720" HorizontalAlignment="Left">
-            <TextBlock Text="统计" FontSize="22" FontWeight="SemiBold" />
+            <StackPanel Orientation="Horizontal" Spacing="10">
+                <TextBlock Text="统计" FontSize="22" FontWeight="SemiBold" />
+                <ProgressRing
+                    IsActive="{Binding IsLoading, Mode=OneWay}"
+                    Width="18"
+                    Height="18"
+                    VerticalAlignment="Center"
+                    Visibility="{Binding IsLoading, Mode=OneWay, Converter={StaticResource BoolToVisibility}}" />
+            </StackPanel>
+            <InfoBar
+                IsOpen="{Binding HasError, Mode=OneWay}"
+                IsClosable="False"
+                Severity="Error"
+                Title="统计数据加载失败"
+                Message="{Binding ErrorMessage, Mode=OneWay}"
+                Visibility="{Binding HasError, Mode=OneWay, Converter={StaticResource BoolToVisibility}}" />
 
             <Grid ColumnSpacing="12" RowSpacing="12">
                 <Grid.ColumnDefinitions>

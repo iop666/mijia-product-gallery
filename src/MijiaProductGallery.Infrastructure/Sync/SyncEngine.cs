@@ -116,7 +116,9 @@ public sealed class SyncEngine(
         Interlocked.Exchange(ref linkedCts, linked);
         try
         {
-            return await RunAsync(trigger, linked.Token);
+            // 整个同步链脱离 UI 线程：分类/产品对比等大对象构建与图片落盘含同步 CPU 段，
+            // 在 UI 线程上跑会持续卡顿；进度事件由订阅方自行调度回 UI。
+            return await Task.Run(() => RunAsync(trigger, linked.Token), CancellationToken.None);
         }
         finally
         {
@@ -182,7 +184,7 @@ public sealed class SyncEngine(
             currentStage = SyncStage.DownloadingImages;
             await SetStageAsync(runId, SyncStage.DownloadingImages, cancellationToken);
             RaiseRunning(SyncStage.DownloadingImages, null, 0, 0, failures.Count, force: true);
-            var reviews = await DownloadImageReviewsAsync(
+            using var reviews = await DownloadImageReviewsAsync(
                 remoteByModel,
                 local,
                 failures,
@@ -203,7 +205,7 @@ public sealed class SyncEngine(
             RaiseRunning(SyncStage.UpdatingDatabase, $"变更 0/{diff.Changes.Count}", 0, diff.Changes.Count, failures.Count, force: true);
             for (var changeIndex = 0; changeIndex < diff.Changes.Count; changeIndex++)
             {
-                var applied = await ApplyChangeAsync(diff.Changes[changeIndex], remoteByModel, reviews.Images, storedImages, failures, cancellationToken);
+                var applied = await ApplyChangeAsync(diff.Changes[changeIndex], remoteByModel, reviews, storedImages, failures, cancellationToken);
                 if (applied is not null)
                 {
                     appliedChanges.Add(applied);
@@ -354,7 +356,10 @@ public sealed class SyncEngine(
 
         var completed = 0;
         var total = reviewModels.Count;
-        var images = new ConcurrentDictionary<string, byte[]>(StringComparer.Ordinal);
+        // 下载内容落临时文件而非驻留内存：首轮全量复核可达上万张，全部 byte[] 常驻会耗尽内存。
+        var tempDirectory = Path.Combine(Path.GetTempPath(), "MijiaProductGallery", $"sync-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(tempDirectory);
+        var tempFiles = new ConcurrentDictionary<string, string>(StringComparer.Ordinal);
         var inputs = new ConcurrentDictionary<string, ImageReviewInput>(StringComparer.Ordinal);
         using var throttle = new SemaphoreSlim(ImageDownloadConcurrency, ImageDownloadConcurrency);
         var tasks = reviewModels.Select(async model =>
@@ -371,13 +376,15 @@ public sealed class SyncEngine(
                 try
                 {
                     var bytes = await imageDownloader.DownloadAsync(url, cancellationToken);
-                    images[model] = bytes;
+                    var tempPath = Path.Combine(tempDirectory, Guid.NewGuid().ToString("N"));
+                    await File.WriteAllBytesAsync(tempPath, bytes, cancellationToken);
+                    tempFiles[model] = tempPath;
                     inputs[model] = new ImageReviewInput
                     {
                         DownloadedSha256 = Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant(),
                     };
                 }
-                catch (Exception exception) when (exception is ImageDownloadException or HttpRequestException)
+                catch (Exception exception) when (exception is ImageDownloadException or HttpRequestException or IOException)
                 {
                     failures.Increment();
                     logger?.LogWarning(exception, "图片复核下载失败，保持本地旧状态：{Model}", model);
@@ -389,9 +396,26 @@ public sealed class SyncEngine(
                 onProgress(Interlocked.Increment(ref completed), total, failures.Count);
             }
         });
-        await Task.WhenAll(tasks);
+        try
+        {
+            await Task.WhenAll(tasks);
+        }
+        catch
+        {
+            // 取消/异常时本次复核结果作废，临时目录立即清理。
+            try
+            {
+                Directory.Delete(tempDirectory, recursive: true);
+            }
+            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+            {
+            }
+
+            throw;
+        }
+
         onProgress(total, total, failures.Count);
-        return new ReviewOutcome(images, inputs);
+        return new ReviewOutcome(inputs, tempFiles, tempDirectory);
     }
 
     /// <summary>
@@ -433,7 +457,7 @@ public sealed class SyncEngine(
     private async Task<ProductChange?> ApplyChangeAsync(
         ProductChange change,
         Dictionary<string, RemoteProductState> remoteByModel,
-        ConcurrentDictionary<string, byte[]> reviewImages,
+        ReviewOutcome reviews,
         List<ImageStoreResult> storedImages,
         FailureCounter failures,
         CancellationToken cancellationToken)
@@ -459,11 +483,12 @@ public sealed class SyncEngine(
                     LastSeenUnix = NowUnix(),
                     RandomKey = Random.Shared.NextInt64(),
                 };
-                if (reviewImages.TryGetValue(change.Model, out var bytes))
+                if (reviews.TempFiles.TryGetValue(change.Model, out var tempPath))
                 {
                     try
                     {
-                        var result = await imageStore.StoreNewAsync(change.Model, new MemoryStream(bytes), cancellationToken);
+                        await using var imageStream = File.OpenRead(tempPath);
+                        var result = await imageStore.StoreNewAsync(change.Model, imageStream, cancellationToken);
                         ApplyImage(product, result, change.ImageUrl);
                         if (result.Status != ImageStoreStatus.Unchanged)
                         {
@@ -474,6 +499,11 @@ public sealed class SyncEngine(
                     {
                         failures.Increment();
                         logger?.LogWarning(exception, "新型号图片校验失败，先入库无图记录：{Model}", change.Model);
+                    }
+                    catch (IOException exception)
+                    {
+                        failures.Increment();
+                        logger?.LogWarning(exception, "新型号图片临时文件读取失败，先入库无图记录：{Model}", change.Model);
                     }
                 }
 
@@ -528,13 +558,14 @@ public sealed class SyncEngine(
 
                 ImageStoreResult? storeResult = null;
                 if (change.ImageOutcome is ImageOutcome.ImageChanged or ImageOutcome.IdReused
-                    && reviewImages.TryGetValue(change.Model, out var bytes))
+                    && reviews.TempFiles.TryGetValue(change.Model, out var tempPath))
                 {
                     try
                     {
+                        await using var imageStream = File.OpenRead(tempPath);
                         storeResult = change.ImageOutcome == ImageOutcome.IdReused || row.ImageFileName is null
-                            ? await imageStore.ReplaceWithHistoryAsync(change.Model, row.ImageFileName ?? string.Empty, new MemoryStream(bytes), cancellationToken)
-                            : await imageStore.ReplaceAsync(change.Model, row.ImageFileName, new MemoryStream(bytes), cancellationToken);
+                            ? await imageStore.ReplaceWithHistoryAsync(change.Model, row.ImageFileName ?? string.Empty, imageStream, cancellationToken)
+                            : await imageStore.ReplaceAsync(change.Model, row.ImageFileName, imageStream, cancellationToken);
                         if (storeResult.Status != ImageStoreStatus.Unchanged)
                         {
                             ApplyImage(row, storeResult, change.ImageUrl);
@@ -545,6 +576,11 @@ public sealed class SyncEngine(
                     {
                         failures.Increment();
                         logger?.LogWarning(exception, "图片落盘校验失败，保持本地旧图：{Model}", change.Model);
+                    }
+                    catch (IOException exception)
+                    {
+                        failures.Increment();
+                        logger?.LogWarning(exception, "图片临时文件读取失败，保持本地旧图：{Model}", change.Model);
                     }
                 }
 
@@ -576,6 +612,7 @@ public sealed class SyncEngine(
     {
         for (var index = 0; index < storedImages.Count; index++)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             try
             {
                 await thumbnailService.EnsureThumbnailAsync(storedImages[index].ImageFileName, storedImages[index].Sha256, cancellationToken);
@@ -646,7 +683,24 @@ public sealed class SyncEngine(
         }
     }
 
+    /// <summary>复核结果：SHA 结论 + 落地到临时目录的图片；Dispose 时清空临时目录。</summary>
     private sealed record ReviewOutcome(
-        ConcurrentDictionary<string, byte[]> Images,
-        ConcurrentDictionary<string, ImageReviewInput> Inputs);
+        ConcurrentDictionary<string, ImageReviewInput> Inputs,
+        ConcurrentDictionary<string, string> TempFiles,
+        string TempDirectory) : IDisposable
+    {
+        public void Dispose()
+        {
+            try
+            {
+                if (Directory.Exists(TempDirectory))
+                {
+                    Directory.Delete(TempDirectory, recursive: true);
+                }
+            }
+            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+            {
+            }
+        }
+    }
 }

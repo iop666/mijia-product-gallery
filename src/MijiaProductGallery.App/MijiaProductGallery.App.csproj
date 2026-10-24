@@ -13,8 +13,8 @@
     <WindowsAppSDKSelfContained>true</WindowsAppSDKSelfContained>
     <SelfContained>true</SelfContained>
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
-    <Version>0.2.0</Version>
-    <InformationalVersion>0.2.0</InformationalVersion>
+    <Version>0.2.1</Version>
+    <InformationalVersion>0.2.1</InformationalVersion>
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(Configuration)' == 'Release'">

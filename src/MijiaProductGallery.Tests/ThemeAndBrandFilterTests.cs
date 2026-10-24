@@ -121,4 +121,18 @@ public class BrandSearchFilterTests
         pane.BrandSearchText = string.Empty;
         Assert.True(pane.Brands.Single(b => b.Label == "8H").IsSelected);
     }
+
+    [Fact]
+    public void Reset_ClearsBrandSearch_AndRestoresFullList()
+    {
+        var pane = CreatePane();
+        pane.SetBrandSelected("8H", true);
+        pane.BrandSearchText = "8H";
+
+        pane.Reset();
+
+        Assert.Null(pane.BrandSearchText);
+        Assert.Equal(5, pane.FilteredBrands.Count);
+        Assert.All(pane.Brands, brand => Assert.False(brand.IsSelected));
+    }
 }

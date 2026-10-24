@@ -46,10 +46,12 @@ public partial class SyncCenterViewModel : ObservableObject
     private string lastSyncText = "从未同步";
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasError))]
     private string? errorMessage;
 
     /// <summary>最近一轮变更统计摘要（如"新增 3 · 下架 1"），无变更时为空。</summary>
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasLastRunSummary))]
     private string? lastRunSummary;
 
     /// <summary>进度区阶段文本（"阶段 4/6 · 下载图片"）。</summary>

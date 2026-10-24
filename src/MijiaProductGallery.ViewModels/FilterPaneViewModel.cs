@@ -224,6 +224,7 @@ public partial class FilterPaneViewModel : ObservableObject
         ImageOptionValue = ImageOption.All;
         Usage = UsageRange.None;
         UpdateRange = DateRange.All;
+        BrandSearchText = null;
         suppressEvents = false;
         RaiseFilterChanged();
     }

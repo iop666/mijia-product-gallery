@@ -4,37 +4,55 @@ using MijiaProductGallery.Core.Models;
 
 namespace MijiaProductGallery.Infrastructure.Database.Repositories;
 
-/// <summary>产品官方数据仓储。官方列更新走显式列白名单（ExecuteUpdate），不可能触碰用户数据。</summary>
-public sealed class ProductRepository(GalleryDbContext context) : IProductRepository
+/// <summary>产品官方数据仓储。官方列更新走显式列白名单（ExecuteUpdate），不可能触碰用户数据。
+/// 应用内经工厂为每个操作新建上下文，避免后台同步与界面查询并发使用同一 DbContext。</summary>
+public sealed class ProductRepository : IProductRepository
 {
-    public Task<Product?> GetByIdAsync(int id, CancellationToken cancellationToken = default)
+    private readonly GalleryDbContext? shared;
+    private readonly IDbContextFactory<GalleryDbContext>? factory;
+
+    public ProductRepository(GalleryDbContext context) => shared = context;
+
+    public ProductRepository(IDbContextFactory<GalleryDbContext> factory) => this.factory = factory;
+
+    private DbContextScope Rent() => new(factory, shared);
+
+    public async Task<Product?> GetByIdAsync(int id, CancellationToken cancellationToken = default)
     {
-        return context.Products.AsNoTracking().FirstOrDefaultAsync(p => p.Id == id, cancellationToken);
+        await using var scope = Rent();
+        return await scope.Context.Products.AsNoTracking()
+            .FirstOrDefaultAsync(p => p.Id == id, cancellationToken);
     }
 
-    public Task<Product?> GetByModelAsync(string model, CancellationToken cancellationToken = default)
+    public async Task<Product?> GetByModelAsync(string model, CancellationToken cancellationToken = default)
     {
-        return context.Products.AsNoTracking().FirstOrDefaultAsync(p => p.Model == model, cancellationToken);
+        await using var scope = Rent();
+        return await scope.Context.Products.AsNoTracking()
+            .FirstOrDefaultAsync(p => p.Model == model, cancellationToken);
     }
 
-    public Task<bool> ExistsByModelAsync(string model, CancellationToken cancellationToken = default)
+    public async Task<bool> ExistsByModelAsync(string model, CancellationToken cancellationToken = default)
     {
-        return context.Products.AnyAsync(p => p.Model == model, cancellationToken);
+        await using var scope = Rent();
+        return await scope.Context.Products.AnyAsync(p => p.Model == model, cancellationToken);
     }
 
-    public Task<int> CountAsync(CancellationToken cancellationToken = default)
+    public async Task<int> CountAsync(CancellationToken cancellationToken = default)
     {
-        return context.Products.CountAsync(cancellationToken);
+        await using var scope = Rent();
+        return await scope.Context.Products.CountAsync(cancellationToken);
     }
 
     public async Task<IReadOnlyList<Product>> GetAllAsync(CancellationToken cancellationToken = default)
     {
-        return await context.Products.AsNoTracking().ToListAsync(cancellationToken);
+        await using var scope = Rent();
+        return await scope.Context.Products.AsNoTracking().ToListAsync(cancellationToken);
     }
 
     public async Task<IReadOnlyList<string>> GetCategoriesAsync(CancellationToken cancellationToken = default)
     {
-        return await context.Products
+        await using var scope = Rent();
+        return await scope.Context.Products
             .AsNoTracking()
             .Select(p => p.Category)
             .Distinct()
@@ -44,7 +62,8 @@ public sealed class ProductRepository(GalleryDbContext context) : IProductReposi
 
     public async Task<IReadOnlyList<string>> GetBrandsAsync(CancellationToken cancellationToken = default)
     {
-        return await context.Products
+        await using var scope = Rent();
+        return await scope.Context.Products
             .AsNoTracking()
             .Select(p => p.Brand)
             .Distinct()
@@ -54,14 +73,16 @@ public sealed class ProductRepository(GalleryDbContext context) : IProductReposi
 
     public async Task AddAsync(Product product, CancellationToken cancellationToken = default)
     {
-        context.Products.Add(product);
-        await context.SaveChangesAsync(cancellationToken);
+        await using var scope = Rent();
+        scope.Context.Products.Add(product);
+        await scope.Context.SaveChangesAsync(cancellationToken);
     }
 
     public async Task AddRangeAsync(IReadOnlyList<Product> products, CancellationToken cancellationToken = default)
     {
-        context.Products.AddRange(products);
-        await context.SaveChangesAsync(cancellationToken);
+        await using var scope = Rent();
+        scope.Context.Products.AddRange(products);
+        await scope.Context.SaveChangesAsync(cancellationToken);
     }
 
     /// <summary>复核采纳官网时间戳：仅写 UpdateTimeUnix 与 LastSeenUnix 两个白名单列。</summary>
@@ -70,6 +91,9 @@ public sealed class ProductRepository(GalleryDbContext context) : IProductReposi
         long lastSeenUnix,
         CancellationToken cancellationToken = default)
     {
+        await using var scope = Rent();
+        var context = scope.Context;
+        await using var transaction = await context.Database.BeginTransactionAsync(cancellationToken);
         foreach (var (model, updateTime) in items)
         {
             await context.Products
@@ -78,12 +102,15 @@ public sealed class ProductRepository(GalleryDbContext context) : IProductReposi
                     .SetProperty(p => p.UpdateTimeUnix, updateTime)
                     .SetProperty(p => p.LastSeenUnix, lastSeenUnix), cancellationToken);
         }
+
+        await transaction.CommitAsync(cancellationToken);
     }
 
     /// <summary>官方列白名单：唯一允许同步引擎写入 Products 的路径。刻意不含 FirstSeenUnix。</summary>
     public async Task UpdateOfficialFieldsAsync(Product product, CancellationToken cancellationToken = default)
     {
-        await context.Products
+        await using var scope = Rent();
+        await scope.Context.Products
             .Where(p => p.Id == product.Id)
             .ExecuteUpdateAsync(setters => setters
                 .SetProperty(p => p.Name, product.Name)

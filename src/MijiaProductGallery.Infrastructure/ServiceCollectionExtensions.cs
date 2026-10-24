@@ -37,16 +37,31 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IThumbnailService, ThumbnailService>();
         services.AddSingleton<IBaikeApiClient, BaikeApiClient>();
         services.AddSingleton<IImageDownloader, ImageDownloader>();
-        services.AddScoped<ISyncService, SyncEngine>();
         services.AddScoped<ISeedImporter, SeedImporter>();
         services.AddScoped<IFirstRunInitializer, FirstRunInitializer>();
-        services.AddScoped<IProductRepository, ProductRepository>();
-        services.AddScoped<IFavoritesRepository, FavoritesRepository>();
-        services.AddScoped<ICollectionRepository, CollectionRepository>();
-        services.AddScoped<IUsageRepository, UsageRepository>();
-        services.AddScoped<ISearchHistoryRepository, SearchHistoryRepository>();
-        services.AddScoped<ISettingsRepository, SettingsRepository>();
-        services.AddScoped<ISyncStateRepository, SyncStateRepository>();
+
+        // 仓储/服务为无状态对象：每次数据库操作经 IDbContextFactory 新建上下文后立即释放。
+        // 绝不能把同一个 GalleryDbContext 注入多个单例（EF Core 非线程安全，并发即抛
+        // "A second operation was started on this context"）。
+        services.AddSingleton<IProductRepository>(
+            provider => new ProductRepository(provider.GetRequiredService<IDbContextFactory<GalleryDbContext>>()));
+        services.AddSingleton<IFavoritesRepository>(
+            provider => new FavoritesRepository(provider.GetRequiredService<IDbContextFactory<GalleryDbContext>>()));
+        services.AddSingleton<ICollectionRepository>(
+            provider => new CollectionRepository(provider.GetRequiredService<IDbContextFactory<GalleryDbContext>>()));
+        services.AddSingleton<IUsageRepository>(
+            provider => new UsageRepository(provider.GetRequiredService<IDbContextFactory<GalleryDbContext>>()));
+        services.AddSingleton<ISearchHistoryRepository>(
+            provider => new SearchHistoryRepository(provider.GetRequiredService<IDbContextFactory<GalleryDbContext>>()));
+        services.AddSingleton<ISettingsRepository>(
+            provider => new SettingsRepository(provider.GetRequiredService<IDbContextFactory<GalleryDbContext>>()));
+        services.AddSingleton<ISyncStateRepository>(
+            provider => new SyncStateRepository(provider.GetRequiredService<IDbContextFactory<GalleryDbContext>>()));
+        services.AddSingleton<IRecentService>(
+            provider => new RecentService(provider.GetRequiredService<IDbContextFactory<GalleryDbContext>>()));
+        services.AddSingleton<ISearchService>(
+            provider => new SearchService(provider.GetRequiredService<IDbContextFactory<GalleryDbContext>>()));
+        services.AddSingleton<ISyncService, SyncEngine>();
         return services;
     }
 }

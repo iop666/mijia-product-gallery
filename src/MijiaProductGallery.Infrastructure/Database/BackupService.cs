@@ -27,12 +27,12 @@ public sealed class BackupService(DatabasePaths paths) : IBackupService
         SqliteConnection.ClearAllPools();
     }
 
-    /// <summary>构建备份文件名（label 经文件名净化，仅保留安全字符）。</summary>
+    /// <summary>构建备份文件名（label 经文件名净化，仅保留安全字符；毫秒级时间戳避免连点重名）。</summary>
     private static string BuildBackupFileName(string? label)
     {
         var safeLabel = new string((label ?? string.Empty).Where(char.IsLetterOrDigit).Take(40).ToArray());
         var suffix = safeLabel.Length == 0 ? string.Empty : $"-{safeLabel}";
-        return $"gallery-{DateTime.Now:yyyyMMdd-HHmmss}{suffix}.db";
+        return $"gallery-{DateTime.Now:yyyyMMdd-HHmmss-fff}{suffix}.db";
     }
 
     public async Task<BackupEntry> CreateBackupAsync(string? label = null, CancellationToken cancellationToken = default)
@@ -40,6 +40,15 @@ public sealed class BackupService(DatabasePaths paths) : IBackupService
         paths.EnsureDirectories();
         var fileName = BuildBackupFileName(label);
         var target = Path.Combine(paths.BackupsDirectory, fileName);
+        var duplicate = 1;
+        while (File.Exists(target))
+        {
+            target = Path.Combine(
+                paths.BackupsDirectory,
+                $"{Path.GetFileNameWithoutExtension(fileName)}-{++duplicate}.db");
+        }
+
+        fileName = Path.GetFileName(target);
 
         await using (var connection = OpenConnection(paths.DatabaseFile))
         {
@@ -102,10 +111,12 @@ public sealed class BackupService(DatabasePaths paths) : IBackupService
         ClearPools();
         await ValidateBackupAsync(backupPath, cancellationToken);
 
-        // 恢复前安全快照：当前库（含可能损坏的状态）先留证。
+        // 恢复前安全快照：先把 WAL 落盘，否则 File.Copy 只拿到主库文件、丢失最近事务。
+        await CheckpointCurrentAsync(cancellationToken);
+
         var safetyCopy = Path.Combine(
             paths.BackupsDirectory,
-            $"pre-restore-{DateTime.Now:yyyyMMdd-HHmmss}.db");
+            $"pre-restore-{DateTime.Now:yyyyMMdd-HHmmss-fff}.db");
         File.Copy(paths.DatabaseFile, safetyCopy, overwrite: true);
 
         try
@@ -118,6 +129,21 @@ public sealed class BackupService(DatabasePaths paths) : IBackupService
             File.Copy(safetyCopy, paths.DatabaseFile, overwrite: true);
             throw;
         }
+    }
+
+    /// <summary>当前库 WAL 截断落盘，保证后续 File.Copy 得到包含全部已提交事务的主库文件。</summary>
+    private async Task CheckpointCurrentAsync(CancellationToken cancellationToken)
+    {
+        if (!File.Exists(paths.DatabaseFile))
+        {
+            return;
+        }
+
+        await using var connection = OpenConnection(paths.DatabaseFile);
+        await connection.OpenAsync(cancellationToken);
+        await using var command = connection.CreateCommand();
+        command.CommandText = "PRAGMA wal_checkpoint(TRUNCATE);";
+        await command.ExecuteNonQueryAsync(cancellationToken);
     }
 
     /// <summary>校验备份文件：quick_check 通过且包含全部必需表。</summary>

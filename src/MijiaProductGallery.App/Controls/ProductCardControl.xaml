@@ -117,6 +117,17 @@
 
             <Border.ContextFlyout>
                 <MenuFlyout x:Name="CardContextMenu" Opening="OnMenuFlyoutOpening">
+                    <MenuFlyoutItem Text="查看详情" Click="OnMenuViewDetailClick">
+                        <MenuFlyoutItem.Icon>
+                            <FontIcon Glyph="&#xE8A5;" />
+                        </MenuFlyoutItem.Icon>
+                    </MenuFlyoutItem>
+                    <MenuFlyoutItem x:Name="MenuOpenLocation" Text="打开文件位置" Click="OnMenuOpenLocationClick">
+                        <MenuFlyoutItem.Icon>
+                            <FontIcon Glyph="&#xE8B7;" />
+                        </MenuFlyoutItem.Icon>
+                    </MenuFlyoutItem>
+                    <MenuFlyoutSeparator />
                     <MenuFlyoutSubItem Text="复制">
                         <MenuFlyoutSubItem.Icon>
                             <FontIcon Glyph="&#xE8C8;" />

@@ -1,6 +1,7 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using System.Diagnostics;
 using System.Runtime.InteropServices;
 using Microsoft.UI.Xaml.Input;
 using MijiaProductGallery.App.Views;
@@ -47,9 +48,14 @@ public sealed partial class ProductCardControl : UserControl
     /// <summary>事件是否已由页面接线（虚拟化复用防重复订阅）。</summary>
     public bool InteractionWired { get; set; }
 
+    /// <summary>由宿主页提供的收藏切换（经图库视图模型统一刷新列表与角标）；
+    /// 未接线时（控件独立测试）回落到收藏服务。</summary>
+    public Func<ProductCard, Task<bool>>? FavoriteToggler { get; set; }
+
     private ProductCard? card;
 
     private Windows.Foundation.Point pressedPoint;
+    private bool leftPressed;
 
     public ProductCardControl()
     {
@@ -104,11 +110,14 @@ public sealed partial class ProductCardControl : UserControl
             return;
         }
 
-        _ = PopulateFavoriteMenuCoreAsync(Card);
+        _ = PopulateFavoriteMenuCoreAsync(Card, ++favoriteMenuGeneration);
     }
 
+    /// <summary>每次打开菜单递增：异步读取合集期间若菜单已重开，旧结果直接丢弃。</summary>
+    private int favoriteMenuGeneration;
+
     /// <summary>勾选式"加入收藏"子菜单：默认收藏 + 各合集（勾选=已加入）+ 新建收藏夹…。</summary>
-    private async Task PopulateFavoriteMenuCoreAsync(ProductCard card)
+    private async Task PopulateFavoriteMenuCoreAsync(ProductCard card, int generation)
     {
         var defaultItem = new ToggleMenuFlyoutItem
         {
@@ -119,7 +128,9 @@ public sealed partial class ProductCardControl : UserControl
         {
             try
             {
-                card.IsFavorite = await Favorites.ToggleAsync(card.ProductId);
+                card.IsFavorite = FavoriteToggler is { } toggler
+                    ? await toggler(card)
+                    : await Favorites.ToggleAsync(card.ProductId);
                 defaultItem.IsChecked = card.IsFavorite;
             }
             catch (Exception exception) when (exception is UnauthorizedAccessException or InvalidOperationException or COMException)
@@ -140,9 +151,19 @@ public sealed partial class ProductCardControl : UserControl
             rows = [];
         }
 
+        if (generation != favoriteMenuGeneration)
+        {
+            return;
+        }
+
         foreach (var row in rows)
         {
             var joined = (await Collections.GetProductIdsAsync(row.Id)).Contains(card.ProductId);
+            if (generation != favoriteMenuGeneration)
+            {
+                return;
+            }
+
             var item = new ToggleMenuFlyoutItem
             {
                 Text = row.Name,
@@ -244,8 +265,8 @@ public sealed partial class ProductCardControl : UserControl
             return;
         }
 
-        // 菜单键或 Shift+F10：键盘打开右键菜单（若框架已打开则不重复）。
-        var isMenuKey = e.Key == Windows.System.VirtualKey.Menu;
+        // 菜单键（Application）或 Shift+F10：键盘打开右键菜单（若框架已打开则不重复）。
+        var isMenuKey = e.Key == Windows.System.VirtualKey.Application;
         var isShiftF10 = e.Key == Windows.System.VirtualKey.F10
             && Microsoft.UI.Input.InputKeyboardSource
                 .GetKeyStateForCurrentThread(Windows.System.VirtualKey.Shift)
@@ -272,6 +293,44 @@ public sealed partial class ProductCardControl : UserControl
     {
         var hasImage = Card?.HasImage ?? false;
         MenuCopyImage.IsEnabled = hasImage;
+        MenuOpenLocation.IsEnabled = hasImage;
+    }
+
+    private void OnMenuViewDetailClick(object sender, RoutedEventArgs e)
+    {
+        if (Card is not null)
+        {
+            DetailRequested?.Invoke(this, Card);
+        }
+    }
+
+    /// <summary>在资源管理器中定位原图；文件缺失时给出可操作的提示而不是静默失败。</summary>
+    private void OnMenuOpenLocationClick(object sender, RoutedEventArgs e)
+    {
+        if (Card?.ImagePath is null)
+        {
+            ActionFailed?.Invoke(this, "该产品没有图片文件");
+            return;
+        }
+
+        var absolute = ImageStore.ResolveAbsolutePath(Card.ImagePath);
+        if (string.IsNullOrWhiteSpace(absolute) || !File.Exists(absolute))
+        {
+            ActionFailed?.Invoke(this, "图片文件不存在，请先完成同步后再试");
+            return;
+        }
+
+        try
+        {
+            Process.Start(new ProcessStartInfo("explorer.exe", $"/select,\"{absolute}\"")
+            {
+                UseShellExecute = true,
+            });
+        }
+        catch (Exception exception)
+        {
+            ActionFailed?.Invoke(this, $"打开文件位置失败：{exception.Message}");
+        }
     }
 
     private void OnPointerPressed(object sender, PointerRoutedEventArgs e)
@@ -281,13 +340,24 @@ public sealed partial class ProductCardControl : UserControl
             return;
         }
 
+        leftPressed = true;
         pressedPoint = e.GetCurrentPoint(this).Position;
         VisualStateManager.GoToState(this, "Pressed", useTransitions: false);
     }
 
-    private async void OnPointerReleased(object sender, PointerRoutedEventArgs e)
+    /// <summary>左键单击：交给宿主页统一记录查看行为并打开详情（与键盘 Enter 同一入口）。</summary>
+    private void OnPointerReleased(object sender, PointerRoutedEventArgs e)
     {
+        // 只有跟踪到左键按下才可能是单击：右键/中键释放不能用上一轮的按下点误触发详情。
+        var wasLeftPressed = leftPressed;
+        leftPressed = false;
         VisualStateManager.GoToState(this, "Normal", useTransitions: false);
+        if (!wasLeftPressed
+            || e.GetCurrentPoint(this).Properties.PointerUpdateKind
+                != Microsoft.UI.Input.PointerUpdateKind.LeftButtonReleased)
+        {
+            return;
+        }
 
         var position = e.GetCurrentPoint(this).Position;
         var moved = DragGesture.ShouldStartByMove(
@@ -298,48 +368,7 @@ public sealed partial class ProductCardControl : UserControl
             return;
         }
 
-        try
-        {
-            await Usage.RecordAsync(Card.ProductId, UsageType.View, DateTimeOffset.UtcNow.ToUnixTimeSeconds());
-        }
-        catch
-        {
-            // 查看计数失败不影响详情展示。
-        }
-
-        var dialog = new ContentDialog
-        {
-            XamlRoot = RootGrid.XamlRoot,
-            RequestedTheme = ActualTheme,
-            Title = Card.Name,
-            CloseButtonText = "关闭",
-            DefaultButton = ContentDialogButton.Close,
-        };
-        var info = new StackPanel { Spacing = 8 };
-        info.Children.Add(new TextBlock
-        {
-            Text = Card.Model,
-            FontSize = 13,
-            Foreground = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["TextFillColorSecondaryBrush"],
-        });
-        info.Children.Add(new TextBlock
-        {
-            Text = $"{Card.Brand} · {Card.Category}",
-            FontSize = 13,
-            Foreground = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["TextFillColorTertiaryBrush"],
-        });
-        if (Card.ImageFileName is not null)
-        {
-            info.Children.Add(new TextBlock
-            {
-                Text = $"图片文件：{Card.ImageFileName}",
-                FontSize = 12,
-                TextWrapping = TextWrapping.Wrap,
-                Foreground = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["TextFillColorSecondaryBrush"],
-            });
-        }
-        dialog.Content = info;
-        _ = dialog.ShowAsync();
+        DetailRequested?.Invoke(this, Card);
     }
 
     private void OnPointerEntered(object sender, PointerRoutedEventArgs e)
@@ -430,7 +459,11 @@ public sealed partial class ProductCardControl : UserControl
         }
 
         var result = await App.Services.GetRequiredService<CardActionService>().CopyImageAsync(Card);
-        if (!result.Success)
+        if (result.Success)
+        {
+            ActionInfo?.Invoke(this, "已复制图片到剪贴板");
+        }
+        else
         {
             ActionFailed?.Invoke(this, result.ErrorMessage ?? "复制失败");
         }
@@ -444,7 +477,17 @@ public sealed partial class ProductCardControl : UserControl
         }
 
         var result = await App.Services.GetRequiredService<CardActionService>().CopyTextAsync(Card, kind);
-        if (!result.Success)
+        if (result.Success)
+        {
+            ActionInfo?.Invoke(this, kind switch
+            {
+                CardTextKind.Name => "已复制产品名称",
+                CardTextKind.Model => "已复制型号",
+                CardTextKind.Brand => "已复制品牌",
+                _ => "已复制完整信息",
+            });
+        }
+        else
         {
             ActionFailed?.Invoke(this, result.ErrorMessage ?? "复制失败");
         }

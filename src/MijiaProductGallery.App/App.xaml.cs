@@ -109,7 +109,6 @@ public partial class App : Application
         services.AddSingleton<InitializationViewModel>();
         services.AddSingleton<IUsageService, UsageService>();
         services.AddSingleton<IFavoriteService, FavoriteService>();
-        services.AddSingleton<ISearchService, SearchService>();
         services.AddSingleton<ISystemClipboard, Services.ClipboardService>();
         services.AddSingleton<Core.Interfaces.ICollectionExportService, CollectionExportService>();
         services.AddSingleton<CardActionService>();

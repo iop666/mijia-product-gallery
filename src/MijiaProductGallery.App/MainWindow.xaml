@@ -18,6 +18,7 @@
                     Width="16"
                     Height="16" />
                 <TextBlock
+                    x:Name="TitleText"
                     Text="米家产品示例图库"
                     FontSize="12"
                     VerticalAlignment="Center" />

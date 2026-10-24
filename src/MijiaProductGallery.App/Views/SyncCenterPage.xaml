@@ -69,7 +69,12 @@
                 Visibility="{Binding HasLastRunSummary, Mode=OneWay, Converter={StaticResource InverseBool}}" />
 
             <StackPanel Orientation="Horizontal" Spacing="10" Margin="0,8,0,0">
-                <Button Content="立即同步" Style="{StaticResource AccentButtonStyle}" Click="OnSyncNowClick" />
+                <Button
+                    Content="立即同步"
+                    Style="{StaticResource AccentButtonStyle}"
+                    AutomationProperties.Name="立即同步"
+                    IsEnabled="{Binding IsRunning, Mode=OneWay, Converter={StaticResource InverseBool}}"
+                    Click="OnSyncNowClick" />
                 <Button Content="取消" Click="OnCancelClick" IsEnabled="{Binding IsRunning, Mode=OneWay}" />
             </StackPanel>
 
@@ -77,6 +82,8 @@
             <StackPanel Orientation="Horizontal" Spacing="10">
                 <ComboBox
                     MinWidth="160"
+                    AutomationProperties.Name="自动同步频率"
+                    DropDownOpened="OnComboOpening"
                     SelectedIndex="{Binding AutoIntervalIndex, Mode=TwoWay}"
                     SelectionChanged="OnAutoIntervalSelectionChanged">
                     <ComboBoxItem Content="关闭" />

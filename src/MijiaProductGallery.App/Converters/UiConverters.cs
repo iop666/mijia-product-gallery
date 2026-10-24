@@ -22,4 +22,26 @@ public static class UiConverters
     {
         return string.IsNullOrWhiteSpace(path) ? null : new BitmapImage(new Uri(path));
     }
+
+    /// <summary>Unix 秒 → 本地时间文案（备份列表等只读展示）。</summary>
+    public static string FormatUnixTime(long unixSeconds)
+    {
+        return DateTimeOffset.FromUnixTimeSeconds(unixSeconds).ToLocalTime().ToString("yyyy-MM-dd HH:mm");
+    }
+
+    /// <summary>字节数 → 人类可读大小（备份列表等只读展示）。</summary>
+    public static string FormatFileSize(long bytes)
+    {
+        if (bytes < 1024)
+        {
+            return $"{bytes} B";
+        }
+
+        if (bytes < 1024 * 1024)
+        {
+            return $"{bytes / 1024.0:0.#} KB";
+        }
+
+        return $"{bytes / (1024.0 * 1024):0.##} MB";
+    }
 }

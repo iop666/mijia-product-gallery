@@ -163,6 +163,21 @@ public sealed class GalleryPagingViewModelTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task RefreshCurrent_KeepsCurrentPage()
+    {
+        await vm!.LoadAsync();
+        await WaitForAsync(() => vm.Cards.Count == 10);
+        vm.GoToNextPage();
+        await WaitForAsync(() => vm.CurrentPage == 2 && vm.Cards.Count == 10);
+
+        await vm.RefreshCurrentAsync();
+
+        Assert.Equal(2, vm.CurrentPage);
+        Assert.Equal("2", vm.PageBoxText);
+        await WaitForAsync(() => vm.Cards.Count == 10 && vm.CurrentPage == 2);
+    }
+
+    [Fact]
     public async Task EmptyResult_ClampsToFirstPage_AndHidesPager()
     {
         await vm!.LoadAsync();

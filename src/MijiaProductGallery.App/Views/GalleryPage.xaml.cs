@@ -69,6 +69,10 @@ public sealed partial class GalleryPage : Page
         {
             UpdateQuickRemoveLabels();
         }
+        else if (e.PropertyName == nameof(MijiaProductGallery.ViewModels.GalleryViewModel.SortLabel))
+        {
+            UpdateSortMenuChecks();
+        }
     }
 
     /// <summary>导航回图库时刷新数据（首次导入完成等场景）。</summary>
@@ -98,6 +102,23 @@ public sealed partial class GalleryPage : Page
         }
 
         SyncFilterCombos();
+        UpdateSortMenuChecks();
+    }
+
+    /// <summary>排序菜单：当前生效项打勾（恢复默认排序时勾"默认排序"）。</summary>
+    private void UpdateSortMenuChecks()
+    {
+        var activeTag = vm?.Sort is { } sort ? $"{sort.Field}:{sort.Direction}" : "default";
+        foreach (var item in SortFlyout.Items)
+        {
+            if (item is not MenuFlyoutItem menu)
+            {
+                continue;
+            }
+
+            var active = string.Equals(menu.Tag as string, activeTag, StringComparison.OrdinalIgnoreCase);
+            menu.Icon = active ? new FontIcon { Glyph = "\uE73E", FontSize = 12 } : null;
+        }
     }
 
     private void OnElementPrepared(ItemsRepeater sender, ItemsRepeaterElementPreparedEventArgs args)
@@ -138,6 +159,8 @@ public sealed partial class GalleryPage : Page
             liveCards.Add(control);
         }
 
+        // 收藏切换统一经视图模型：收藏视图即时移出、角标与计数同步刷新。
+        control.FavoriteToggler = vm is null ? null : card => vm.ToggleFavoriteAsync(card);
         control.SetQuickRemove(CurrentQuickRemoveLabel());
     }
 
@@ -163,7 +186,6 @@ public sealed partial class GalleryPage : Page
         }
     }
 
-    /// <summary>左键单击：ViewCount+1，并打开详情对话框。</summary>
     private async void OnCardDetailRequested(object? sender, ProductCard card)
     {
         try
@@ -175,30 +197,17 @@ public sealed partial class GalleryPage : Page
             // 查看计数失败不影响详情展示。
         }
 
-        var dialog = new ContentDialog
+        try
         {
-            XamlRoot = XamlRoot,
-            RequestedTheme = ThemeManager.ToElementTheme(ThemeManager.CurrentTheme),
-            Title = "产品详情",
-            CloseButtonText = "关闭",
-            Content = new StackPanel
-            {
-                Spacing = 8,
-                Children =
-                {
-                    new TextBlock { Text = card.Name, FontSize = 18, TextWrapping = TextWrapping.Wrap },
-                    new TextBlock { Text = $"型号：{card.Model}" },
-                    new TextBlock { Text = $"品牌：{card.Brand}" },
-                    new TextBlock { Text = $"分类：{card.Category}" },
-                    new TextBlock
-                    {
-                        Text = "型号、品牌、分类信息如上，图片可拖拽或复制使用。",
-                        Foreground = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["TextFillColorSecondaryBrush"],
-                    },
-                },
-            },
-        };
-        _ = await dialog.ShowAsync();
+            await ProductDetailDialog.ShowAsync(
+                XamlRoot,
+                card,
+                vm is null ? null : productCard => vm.ToggleFavoriteAsync(productCard));
+        }
+        catch (Exception exception)
+        {
+            ShowNotice($"打开详情失败：{exception.Message}", InfoBarSeverity.Error);
+        }
     }
 
     private void OnCardDragCompleted(object? sender, ProductCard card)
@@ -299,6 +308,8 @@ public sealed partial class GalleryPage : Page
                 await App.Services.GetRequiredService<ICollectionRepository>()
                     .RemoveItemAsync(collectionId, card.ProductId);
                 ShowNotice($"已从「{name}」移除");
+                // 重新查询当前合集：卡片与计数立即反映删除结果。
+                await Vm.RefreshCurrentAsync();
             }
             catch (Exception exception) when (exception is UnauthorizedAccessException
                 or InvalidOperationException
@@ -384,6 +395,19 @@ public sealed partial class GalleryPage : Page
 
     /// <summary>导出收藏夹：命名方式 → 保存位置 → 流式 ZIP（进度可取消）。</summary>
     private async void OnExportCollectionClick(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            await ExportCollectionCoreAsync();
+        }
+        catch (Exception exception)
+        {
+            // async void 中的异常会直接终止进程：导出链路的 IO/取消必须在此收口。
+            ShowNotice($"导出失败：{exception.Message}", InfoBarSeverity.Error);
+        }
+    }
+
+    private async Task ExportCollectionCoreAsync()
     {
         if (vm is null || !vm.IsFavoritesMode)
         {
@@ -509,11 +533,20 @@ public sealed partial class GalleryPage : Page
         });
 
         var service = App.Services.GetRequiredService<ICollectionExportService>();
-        var result = await service.ExportAsync(
-            new CollectionExportRequest { Items = items, ZipFilePath = zipPath, NameByModel = nameByModel },
-            progress,
-            cts.Token);
-        dialog.Hide();
+        CollectionExportResult result;
+        try
+        {
+            result = await service.ExportAsync(
+                new CollectionExportRequest { Items = items, ZipFilePath = zipPath, NameByModel = nameByModel },
+                progress,
+                cts.Token);
+        }
+        finally
+        {
+            // 任何失败/取消都收起进度框，避免遮罩残留。
+            dialog.Hide();
+        }
+
         return result;
     }
 
@@ -567,6 +600,12 @@ public sealed partial class GalleryPage : Page
     private void OnBrowseGalleryClick(object sender, RoutedEventArgs e)
     {
         (App.MainWindow as MainWindow)?.ShowGallery();
+    }
+
+    /// <summary>空图库：跳转到初始化页导入或在线初始化。</summary>
+    private void OnOpenInitializationClick(object sender, RoutedEventArgs e)
+    {
+        (App.MainWindow as MainWindow)?.ShowInitializationPage();
     }
 
     /// <summary>收藏夹下拉交互选择（SelectedItem 为 OneWay 绑定，避免列表重建时写回 null）。</summary>
@@ -628,6 +667,7 @@ public sealed partial class GalleryPage : Page
         if (tag == "default")
         {
             vm.ApplySort(null);
+            UpdateSortMenuChecks();
             return;
         }
 
@@ -637,7 +677,27 @@ public sealed partial class GalleryPage : Page
             && Enum.TryParse<SortDirection>(parts[1], ignoreCase: true, out var direction))
         {
             vm.ApplySort(new ProductSort { Field = field, Direction = direction });
+            UpdateSortMenuChecks();
         }
+    }
+
+    /// <summary>无结果空状态的动作：优先清除搜索词，否则清空全部筛选并同步面板。</summary>
+    private void OnNoResultsActionClick(object sender, RoutedEventArgs e)
+    {
+        if (vm is null)
+        {
+            return;
+        }
+
+        if (!string.IsNullOrWhiteSpace(vm.SearchText) && !vm.HasNonSearchConditions)
+        {
+            vm.ApplySearchImmediate(string.Empty);
+            return;
+        }
+
+        vm.ClearAllFilters();
+        BrandSearchBox.Text = string.Empty;
+        SyncFilterCombos();
     }
 
     private void OnRandomEnterClick(object sender, RoutedEventArgs e)
@@ -702,6 +762,7 @@ public sealed partial class GalleryPage : Page
 
         vm.ClearAllFilters();
         suppressComboEvents = true;
+        BrandSearchBox.Text = string.Empty;
         AvailabilityCombo.SelectedIndex = 0;
         ImageCombo.SelectedIndex = 0;
         UsageCombo.SelectedIndex = 0;
@@ -720,6 +781,11 @@ public sealed partial class GalleryPage : Page
         }
 
         suppressComboEvents = true;
+        var brandSearch = vm.FilterPane.BrandSearchText ?? string.Empty;
+        if (BrandSearchBox.Text != brandSearch)
+        {
+            BrandSearchBox.Text = brandSearch;
+        }
         AvailabilityCombo.SelectedIndex = vm.FilterPane.Availability switch
         {
             AvailabilityOption.AvailableOnly => 1,
@@ -762,6 +828,11 @@ public sealed partial class GalleryPage : Page
         if (sender is Microsoft.UI.Xaml.Controls.Primitives.FlyoutBase flyout)
         {
             ThemeManager.ApplyToFlyout(flyout);
+        }
+
+        if (ReferenceEquals(sender, SortFlyout))
+        {
+            UpdateSortMenuChecks();
         }
     }
 
@@ -819,16 +890,27 @@ public sealed partial class GalleryPage : Page
             return;
         }
 
+        // Esc 关闭筛选面板要先于文本框守卫：焦点常在面板内的品牌搜索框，
+        // 若先交还文本框，键盘用户无法用 Esc 退出面板。
+        if (e.Key == Windows.System.VirtualKey.Escape && vm.FilterPane.IsOpen)
+        {
+            vm.FilterPane.IsOpen = false;
+            e.Handled = true;
+            FilterButton.Focus(Microsoft.UI.Xaml.FocusState.Programmatic);
+            return;
+        }
+
         if (focused is TextBox or AutoSuggestBox or ComboBox or ComboBoxItem)
         {
             // 文本编辑与下拉选择的原生键盘行为不受翻页接管影响。
             return;
         }
 
-        if (e.Key == Windows.System.VirtualKey.Escape && vm.FilterPane.IsOpen)
+        // 焦点在卡片网格内时，←/→ 属于网格内焦点导航，不做翻页（PageUp/PageDown/Home/End 仍翻页）。
+        if (focused is DependencyObject focusedElement
+            && IsDescendantOf(focusedElement, CardsRepeater)
+            && e.Key is Windows.System.VirtualKey.Left or Windows.System.VirtualKey.Right)
         {
-            vm.FilterPane.IsOpen = false;
-            e.Handled = true;
             return;
         }
 
@@ -902,17 +984,6 @@ public sealed partial class GalleryPage : Page
         }
 
         return false;
-    }
-
-    /// <summary>Esc：筛选面板打开时优先关闭面板，其余场景交给原生处理。</summary>
-    private void OnEscapeInvoked(Microsoft.UI.Xaml.Input.KeyboardAccelerator sender,
-        Microsoft.UI.Xaml.Input.KeyboardAcceleratorInvokedEventArgs args)
-    {
-        if (vm is { FilterPane.IsOpen: true })
-        {
-            vm.FilterPane.IsOpen = false;
-            args.Handled = true;
-        }
     }
 
     private void OnBrandSearchTextChanged(object sender, TextChangedEventArgs e)

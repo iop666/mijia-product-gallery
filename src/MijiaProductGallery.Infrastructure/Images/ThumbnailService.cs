@@ -66,16 +66,14 @@ public sealed class ThumbnailService(DatabasePaths paths, ThumbnailSettings? set
             File.WriteAllBytes(temp, bytes);
             File.Move(temp, thumbnailPath, overwrite: true);
         }
+        catch (IOException) when (File.Exists(thumbnailPath))
+        {
+            // 另一张卡片/另一个进程刚写入同名缓存：目标已存在即视为成功。
+            TryDelete(temp);
+        }
         catch
         {
-            try
-            {
-                File.Delete(temp);
-            }
-            catch (IOException)
-            {
-            }
-
+            TryDelete(temp);
             throw;
         }
 
@@ -95,13 +93,22 @@ public sealed class ThumbnailService(DatabasePaths paths, ThumbnailSettings? set
 
     public Task DeleteAllThumbnailsAsync(CancellationToken cancellationToken = default)
     {
-        if (Directory.Exists(paths.ThumbnailsDirectory))
+        // 逐个删除：界面上仍在显示的缩略图可能被 BitmapImage 占用，跳过即可，不能让整次清空失败。
+        return Task.Run(() =>
         {
-            Directory.Delete(paths.ThumbnailsDirectory, recursive: true);
-        }
-
-        Directory.CreateDirectory(paths.ThumbnailsDirectory);
-        return Task.CompletedTask;
+            Directory.CreateDirectory(paths.ThumbnailsDirectory);
+            foreach (var file in Directory.EnumerateFiles(paths.ThumbnailsDirectory))
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                try
+                {
+                    File.Delete(file);
+                }
+                catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+                {
+                }
+            }
+        }, cancellationToken);
     }
 
     private string ThumbnailPath(string imageFileName, string sha256)
@@ -126,16 +133,33 @@ public sealed class ThumbnailService(DatabasePaths paths, ThumbnailSettings? set
         return scaled;
     }
 
+    /// <summary>只读文件头判断可解码（SKCodec 不分配像素缓冲，命中缓存时成本远低于全量解码）。</summary>
     private static bool IsDecodable(string path)
     {
         try
         {
-            using var bitmap = SKBitmap.Decode(path);
-            return bitmap is not null;
+            if (new FileInfo(path).Length < 16)
+            {
+                return false;
+            }
+
+            using var codec = SKCodec.Create(path);
+            return codec is not null && codec.Info.Width > 0 && codec.Info.Height > 0;
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         {
             return false;
+        }
+    }
+
+    private static void TryDelete(string path)
+    {
+        try
+        {
+            File.Delete(path);
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
         }
     }
 }

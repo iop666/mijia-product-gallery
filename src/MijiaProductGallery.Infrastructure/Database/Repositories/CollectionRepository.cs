@@ -5,19 +5,30 @@ using MijiaProductGallery.Core.Models;
 namespace MijiaProductGallery.Infrastructure.Database.Repositories;
 
 /// <summary>收藏合集仓储（用户数据）。删除合集随外键级联清理成员行。</summary>
-public sealed class CollectionRepository(GalleryDbContext context) : ICollectionRepository
+public sealed class CollectionRepository : ICollectionRepository
 {
+    private readonly GalleryDbContext? shared;
+    private readonly IDbContextFactory<GalleryDbContext>? factory;
+
+    public CollectionRepository(GalleryDbContext context) => shared = context;
+
+    public CollectionRepository(IDbContextFactory<GalleryDbContext> factory) => this.factory = factory;
+
+    private DbContextScope Rent() => new(factory, shared);
+
     public async Task<Collection> CreateAsync(string name, long createdUnix, CancellationToken cancellationToken = default)
     {
+        await using var scope = Rent();
         var collection = new Collection { Name = name, CreatedUnix = createdUnix, UpdatedUnix = createdUnix };
-        context.Collections.Add(collection);
-        await context.SaveChangesAsync(cancellationToken);
+        scope.Context.Collections.Add(collection);
+        await scope.Context.SaveChangesAsync(cancellationToken);
         return collection;
     }
 
     public async Task RenameAsync(int collectionId, string newName, long updatedUnix, CancellationToken cancellationToken = default)
     {
-        await context.Collections
+        await using var scope = Rent();
+        await scope.Context.Collections
             .Where(c => c.Id == collectionId)
             .ExecuteUpdateAsync(setters => setters
                 .SetProperty(c => c.Name, newName)
@@ -26,14 +37,16 @@ public sealed class CollectionRepository(GalleryDbContext context) : ICollection
 
     public async Task DeleteAsync(int collectionId, CancellationToken cancellationToken = default)
     {
-        await context.Collections
+        await using var scope = Rent();
+        await scope.Context.Collections
             .Where(c => c.Id == collectionId)
             .ExecuteDeleteAsync(cancellationToken);
     }
 
     public async Task<IReadOnlyList<Collection>> GetAllAsync(CancellationToken cancellationToken = default)
     {
-        return await context.Collections
+        await using var scope = Rent();
+        return await scope.Context.Collections
             .AsNoTracking()
             .OrderBy(c => c.SortOrder)
             .ThenBy(c => c.Id)
@@ -42,6 +55,8 @@ public sealed class CollectionRepository(GalleryDbContext context) : ICollection
 
     public async Task AddItemAsync(int collectionId, int productId, long addedUnix, CancellationToken cancellationToken = default)
     {
+        await using var scope = Rent();
+        var context = scope.Context;
         var exists = await context.CollectionItems.AnyAsync(
             i => i.CollectionId == collectionId && i.ProductId == productId,
             cancellationToken);
@@ -61,14 +76,16 @@ public sealed class CollectionRepository(GalleryDbContext context) : ICollection
 
     public async Task RemoveItemAsync(int collectionId, int productId, CancellationToken cancellationToken = default)
     {
-        await context.CollectionItems
+        await using var scope = Rent();
+        await scope.Context.CollectionItems
             .Where(i => i.CollectionId == collectionId && i.ProductId == productId)
             .ExecuteDeleteAsync(cancellationToken);
     }
 
     public async Task<IReadOnlyList<int>> GetProductIdsAsync(int collectionId, CancellationToken cancellationToken = default)
     {
-        return await context.CollectionItems
+        await using var scope = Rent();
+        return await scope.Context.CollectionItems
             .Where(i => i.CollectionId == collectionId)
             .OrderBy(i => i.SortOrder)
             .ThenBy(i => i.AddedUnix)
