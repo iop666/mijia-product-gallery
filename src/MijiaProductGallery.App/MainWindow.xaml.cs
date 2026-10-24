@@ -20,10 +20,8 @@ public sealed partial class MainWindow : Window
 {
     private GalleryViewModel? galleryViewModel;
     private bool galleryWired;
-    private InitializationViewModel? initializationViewModel;
     private StatisticsViewModel? statisticsViewModel;
     private GalleryPage? galleryPage;
-    private InitializationPage? initializationPage;
     private Views.StatisticsPage? statisticsPage;
     private SyncCenterViewModel? syncCenterViewModel;
     private Views.SyncCenterPage? syncCenterPage;
@@ -222,7 +220,7 @@ public sealed partial class MainWindow : Window
 
     private async Task RouteAsync()
     {
-        // 启动顺序：先建库/迁移，再判断是否需要初始化。
+        // 启动顺序：先建库/迁移，再进入图库（首次许可与初始化已在 StartupWindow 完成）。
         var dbInitializer = App.Services.GetRequiredService<DbInitializer>();
         await dbInitializer.InitializeAsync();
 
@@ -232,71 +230,13 @@ public sealed partial class MainWindow : Window
         settingsViewModel.PageSizeChanged += size => DispatcherQueue.TryEnqueue(() => galleryInstance.OnBrowseSettingsChanged());
         settingsViewModel.BrowseModeChanged += _ => DispatcherQueue.TryEnqueue(() => galleryInstance.OnBrowseSettingsChanged());
 
-        // 首次启动：展示使用条款与免责声明，同意后进入应用。
         var settingsRepository = App.Services.GetRequiredService<ISettingsRepository>();
-        var licenseAgreed = await settingsRepository.GetValueAsync(AppSettingsKeys.LicenseAgreed, false);
-        if (!licenseAgreed)
-        {
-            var agreed = await ShowLicenseDialogAsync();
-            if (!agreed)
-            {
-                Application.Current.Exit();
-                return;
-            }
-
-            await settingsRepository.SetValueAsync(AppSettingsKeys.LicenseAgreed, true);
-        }
-
-        var products = App.Services.GetRequiredService<IProductRepository>();
-        var hasProducts = await products.CountAsync() > 0;
         var launchView = await settingsRepository.GetValueAsync(
             AppSettingsKeys.LaunchView, AppSettingsKeys.LaunchViewDefault);
-        if (!hasProducts)
-        {
-            // 空库只在第一次自动进入控制台加载；中途关闭应用后再次打开停在初始化页，
-            // 由用户选择继续，避免每次启动都从头重跑一遍全量初始化。
-            var initializationStarted = await settingsRepository.GetValueAsync(
-                AppSettingsKeys.InitializationStarted, false);
-            if (!initializationStarted)
-            {
-                try
-                {
-                    await settingsRepository.SetValueAsync(AppSettingsKeys.InitializationStarted, true);
-                }
-                catch
-                {
-                    // 标记写入失败不阻断本次初始化；下次启动最多再自动尝试一次。
-                }
-
-                AppWindow.Hide();
-                var result = await FirstRunConsole.RunAsync(
-                    App.Services.GetRequiredService<IFirstRunInitializer>(),
-                    App.Services.GetRequiredService<ISyncService>(),
-                    App.Services.GetRequiredService<IAppDataRoot>());
-                if (result == FirstRunConsoleResult.Succeeded)
-                {
-                    ShowLaunchView(launchView);
-                }
-                else
-                {
-                    ShowInitializationPending(result == FirstRunConsoleResult.ConsoleUnavailable
-                        ? "无法打开加载窗口。请开始初始化或选择本地种子包继续。"
-                        : "自动初始化未完成。可直接重试或选择种子包。");
-                }
-            }
-            else
-            {
-                ShowInitializationPending("上次初始化未完成。请选择继续方式。");
-            }
-        }
-        else
-        {
-            ShowLaunchView(launchView);
-        }
+        ShowLaunchView(launchView);
 
         StartAutoSyncScheduler();
 
-        // 控制台阶段窗口被隐藏：无论走哪条路径都恢复显示并置前。
         AppWindow.Show();
         Activate();
     }
@@ -322,46 +262,6 @@ public sealed partial class MainWindow : Window
     /// <summary>主题实时切换：窗口实例保持不变，当前页面与主要 UI 状态全部保留。
     /// 深色↔灰色元素主题相同、无变更信号，借一次浅色过渡强制全树主题资源重解析；
     /// 弹窗/对话框在打开时经 ThemeManager 对齐主题。</summary>
-    /// <summary>首次启动使用条款弹窗：声明应用定位、内容版权与禁止商用。</summary>
-    private async Task<bool> ShowLicenseDialogAsync()
-    {
-        var content = new StackPanel { Spacing = 10, MaxWidth = 520 };
-        content.Children.Add(new TextBlock
-        {
-            Text = "米家产品示例图库是一款开源的 Windows 桌面应用，源代码以 MIT 协议提供：",
-            TextWrapping = TextWrapping.Wrap,
-        });
-        content.Children.Add(new HyperlinkButton
-        {
-            Content = "github.com/iop666/mijia-product-gallery",
-            NavigateUri = new Uri("https://github.com/iop666/mijia-product-gallery"),
-        });
-        content.Children.Add(new TextBlock
-        {
-            Text = "本应用仅供个人学习、研究与软件测试使用，严禁商用。",
-            TextWrapping = TextWrapping.Wrap,
-        });
-        content.Children.Add(new TextBlock
-        {
-            Text = "运行时从米家百科公开产品库获取的产品信息与示例样图，版权归小米公司及相关权利人所有；使用远端内容须遵守相关法律法规及来源方的条款。",
-            TextWrapping = TextWrapping.Wrap,
-        });
-
-        var dialog = new ContentDialog
-        {
-            XamlRoot = Nav.XamlRoot,
-            RequestedTheme = ThemeManager.ToElementTheme(ThemeManager.CurrentTheme),
-            Title = "使用条款与免责声明",
-            Content = content,
-            PrimaryButtonText = "同意并继续",
-            CloseButtonText = "不同意并退出",
-            DefaultButton = ContentDialogButton.Primary,
-        };
-
-        var result = await dialog.ShowAsync();
-        return result == ContentDialogResult.Primary;
-    }
-
     private void OnThemeChanged(string theme)
     {
         DispatcherQueue.TryEnqueue(() => _ = ApplyThemeLiveAsync(theme));
@@ -478,41 +378,6 @@ public sealed partial class MainWindow : Window
         galleryPage.ActivateView();
         ContentFrame.Content = galleryPage;
         SelectNavItem(recent ? "recent" : favorites ? "favorites" : "gallery");
-    }
-
-    /// <summary>供空图库等空状态入口跳转到初始化页；页面只展示选项，不自动重跑。</summary>
-    public void ShowInitializationPage()
-    {
-        ShowInitializationPending("图库为空。请开始初始化或选择本地种子包继续。");
-    }
-
-    /// <summary>进入初始化页前显式置为待启动：页面关闭/应用重启后不会自动再次运行。</summary>
-    private void ShowInitializationPending(string message)
-    {
-        var vm = GetInitializationViewModel();
-        vm.MarkPending(message);
-        ShowInitialization();
-    }
-
-    private InitializationViewModel GetInitializationViewModel()
-    {
-        initializationViewModel ??= App.Services.GetRequiredService<InitializationViewModel>();
-        initializationViewModel.Succeeded -= OnInitializationSucceeded;
-        initializationViewModel.Succeeded += OnInitializationSucceeded;
-        return initializationViewModel;
-    }
-
-    private void ShowInitialization()
-    {
-        var vm = GetInitializationViewModel();
-        initializationPage ??= new InitializationPage(vm);
-        ContentFrame.Content = initializationPage;
-        SelectNavItem("gallery");
-    }
-
-    private void OnInitializationSucceeded()
-    {
-        DispatcherQueue.TryEnqueue(() => ShowGallery());
     }
 
     private void OnItemInvoked(NavigationView sender, NavigationViewItemInvokedEventArgs args)

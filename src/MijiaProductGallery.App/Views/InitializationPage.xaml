@@ -5,15 +5,20 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:local="using:MijiaProductGallery.App.Converters">
 
-    <Grid>
-        <StackPanel
-            HorizontalAlignment="Center"
-            VerticalAlignment="Center"
-            MaxWidth="560"
-            Spacing="18">
+    <!-- 行布局：标题区顶部、目录卡片随后、按钮固定在底部，窗口再小也不会把主按钮挤出可视区 -->
+    <Grid Padding="28,24" RowSpacing="16">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <StackPanel Grid.Row="0" Spacing="10" MaxWidth="560" HorizontalAlignment="Center">
             <FontIcon
-                Glyph="&#xE8F1;"
-                FontSize="44"
+                Glyph="&#xE896;"
+                FontSize="40"
                 HorizontalAlignment="Center"
                 Foreground="{ThemeResource AccentFillColorDefaultBrush}" />
             <TextBlock
@@ -28,60 +33,68 @@
                 HorizontalAlignment="Center"
                 TextWrapping="Wrap"
                 TextAlignment="Center" />
-            <ProgressBar
-                IsIndeterminate="{x:Bind Vm.IsIndeterminate, Mode=OneWay}"
-                Value="{x:Bind Vm.ProgressValue, Mode=OneWay}"
-                Maximum="100"
-                Height="4"
-                Visibility="{x:Bind local:UiConverters.ToInverseVisibility(Vm.IsActionable), Mode=OneWay}" />
+        </StackPanel>
 
-            <!-- 首次启动明确告知下载位置：便携版可直接随 Data 目录整体搬迁 -->
-            <Border
-                Background="{ThemeResource ControlFillColorSecondaryBrush}"
-                BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
-                BorderThickness="1"
-                CornerRadius="8"
-                Padding="14,10"
-                HorizontalAlignment="Stretch">
-                <StackPanel Spacing="3">
-                    <TextBlock
-                        Text="图片下载目录"
-                        FontSize="12"
-                        Foreground="{ThemeResource TextFillColorTertiaryBrush}" />
-                    <TextBlock
-                        Text="{x:Bind Vm.ImagesDirectory, Mode=OneWay}"
-                        FontSize="12.5"
-                        TextWrapping="Wrap"
-                        IsTextSelectionEnabled="True" />
-                    <TextBlock
-                        Text="数据与备份目录"
-                        FontSize="12"
-                        Margin="0,6,0,0"
-                        Foreground="{ThemeResource TextFillColorTertiaryBrush}" />
-                    <TextBlock
-                        Text="{x:Bind Vm.DataRoot, Mode=OneWay}"
-                        FontSize="12.5"
-                        TextWrapping="Wrap"
-                        IsTextSelectionEnabled="True" />
-                </StackPanel>
-            </Border>
+        <ProgressBar
+            Grid.Row="1"
+            IsIndeterminate="{x:Bind Vm.IsIndeterminate, Mode=OneWay}"
+            Value="{x:Bind Vm.ProgressValue, Mode=OneWay}"
+            Maximum="100"
+            Height="4"
+            Visibility="{x:Bind local:UiConverters.ToInverseVisibility(Vm.IsActionable), Mode=OneWay}" />
 
-            <InfoBar
-                IsOpen="{x:Bind Vm.HasError, Mode=OneWay}"
-                IsClosable="False"
-                Severity="Error"
-                Title="初始化失败"
-                Message="{x:Bind Vm.ErrorMessage, Mode=OneWay}" />
-
-            <StackPanel
-                x:Name="ActionButtons"
-                Orientation="Horizontal"
-                HorizontalAlignment="Center"
-                Spacing="10"
-                Visibility="{x:Bind local:UiConverters.ToVisibility(Vm.IsActionable), Mode=OneWay}">
-                <Button Content="{x:Bind Vm.PrimaryActionText, Mode=OneWay}" Click="OnRetryClick" Style="{StaticResource AccentButtonStyle}" />
-                <Button Content="选择种子包…" Click="OnPickSeedClick" Visibility="{x:Bind local:UiConverters.ToVisibility(Vm.CanPickSeed), Mode=OneWay}" />
+        <!-- 首次启动明确告知下载位置：便携版可直接随 Data 目录整体搬迁 -->
+        <Border
+            Grid.Row="2"
+            Background="{ThemeResource ControlFillColorSecondaryBrush}"
+            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+            BorderThickness="1"
+            CornerRadius="8"
+            Padding="14,10"
+            MaxWidth="560"
+            HorizontalAlignment="Stretch">
+            <StackPanel Spacing="3">
+                <TextBlock
+                    Text="图片下载目录"
+                    FontSize="12"
+                    Foreground="{ThemeResource TextFillColorTertiaryBrush}" />
+                <TextBlock
+                    Text="{x:Bind Vm.ImagesDirectory, Mode=OneWay}"
+                    FontSize="12.5"
+                    TextWrapping="Wrap"
+                    IsTextSelectionEnabled="True" />
+                <TextBlock
+                    Text="数据与备份目录"
+                    FontSize="12"
+                    Margin="0,6,0,0"
+                    Foreground="{ThemeResource TextFillColorTertiaryBrush}" />
+                <TextBlock
+                    Text="{x:Bind Vm.DataRoot, Mode=OneWay}"
+                    FontSize="12.5"
+                    TextWrapping="Wrap"
+                    IsTextSelectionEnabled="True" />
             </StackPanel>
+        </Border>
+
+        <InfoBar
+            Grid.Row="3"
+            VerticalAlignment="Top"
+            IsOpen="{x:Bind Vm.HasError, Mode=OneWay}"
+            Visibility="{x:Bind local:UiConverters.ToVisibility(Vm.HasError), Mode=OneWay}"
+            IsClosable="False"
+            Severity="Error"
+            Title="初始化失败"
+            Message="{x:Bind Vm.ErrorMessage, Mode=OneWay}" />
+
+        <StackPanel
+            Grid.Row="4"
+            x:Name="ActionButtons"
+            Orientation="Horizontal"
+            HorizontalAlignment="Center"
+            Spacing="10"
+            Visibility="{x:Bind local:UiConverters.ToVisibility(Vm.IsActionable), Mode=OneWay}">
+            <Button Content="{x:Bind Vm.PrimaryActionText, Mode=OneWay}" Click="OnRetryClick" Style="{StaticResource AccentButtonStyle}" />
+            <Button Content="选择种子包…" Click="OnPickSeedClick" Visibility="{x:Bind local:UiConverters.ToVisibility(Vm.CanPickSeed), Mode=OneWay}" />
         </StackPanel>
     </Grid>
 </Page>

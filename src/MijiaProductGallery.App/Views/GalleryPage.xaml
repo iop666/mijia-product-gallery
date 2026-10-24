@@ -378,7 +378,7 @@
             <TextBlock Text="正在加载图库…" HorizontalAlignment="Center" />
         </StackPanel>
 
-        <!-- 空图库：给出直达初始化页的出口，而不是只留一句说明 -->
+        <!-- 空图库：正常启动已由初始化窗口兜底，这里只作异常态说明 -->
         <StackPanel
             Grid.Column="0"
             HorizontalAlignment="Center"
@@ -388,18 +388,12 @@
             <FontIcon Glyph="&#xE8B9;" FontSize="40" Foreground="{ThemeResource TextFillColorSecondaryBrush}" HorizontalAlignment="Center" />
             <TextBlock Text="图库为空" HorizontalAlignment="Center" FontSize="18" />
             <TextBlock
-                Text="尚未导入任何产品。可前往初始化页导入种子数据或进行在线初始化。"
+                Text="尚未导入任何产品。请重新启动应用，应用会引导你完成初始化。"
                 Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                 HorizontalAlignment="Center"
                 TextAlignment="Center"
                 TextWrapping="Wrap"
                 MaxWidth="420" />
-            <Button
-                Content="前往初始化"
-                Style="{StaticResource AccentButtonStyle}"
-                HorizontalAlignment="Center"
-                AutomationProperties.Name="前往初始化"
-                Click="OnOpenInitializationClick" />
         </StackPanel>
 
         <!-- 加载失败 -->

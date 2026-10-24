@@ -643,12 +643,6 @@ public sealed partial class GalleryPage : Page
         (App.MainWindow as MainWindow)?.ShowGallery();
     }
 
-    /// <summary>空图库：跳转到初始化页导入或在线初始化。</summary>
-    private void OnOpenInitializationClick(object sender, RoutedEventArgs e)
-    {
-        (App.MainWindow as MainWindow)?.ShowInitializationPage();
-    }
-
     /// <summary>收藏夹下拉交互选择（SelectedItem 为 OneWay 绑定，避免列表重建时写回 null）。</summary>
     private void OnCollectionBoxSelectionChanged(object sender, SelectionChangedEventArgs e)
     {

@@ -10,21 +10,32 @@ namespace MijiaProductGallery.App.Views;
 public sealed partial class InitializationPage : Page
 {
     private readonly InitializationViewModel vm;
+    private readonly Window hostWindow;
 
     public InitializationViewModel Vm => vm;
 
-    /// <summary>初始化成功（UI 侧跳转图库）。</summary>
+    /// <summary>初始化成功（UI 侧切到主界面）。</summary>
     public event Action? InitializationSucceeded;
 
-    public InitializationPage(InitializationViewModel viewModel)
+    /// <summary>主按钮请求：由宿主决定用控制台还是页内进度执行初始化。</summary>
+    public event Func<Task>? PrimaryActionRequested;
+
+    public InitializationPage(InitializationViewModel viewModel, Window hostWindow)
     {
         InitializeComponent();
         vm = viewModel;
+        this.hostWindow = hostWindow;
         vm.Succeeded += () => InitializationSucceeded?.Invoke();
     }
 
     private async void OnRetryClick(object sender, RoutedEventArgs e)
     {
+        if (PrimaryActionRequested is { } handler)
+        {
+            await handler();
+            return;
+        }
+
         await vm.RunAsync();
     }
 
@@ -36,11 +47,8 @@ public sealed partial class InitializationPage : Page
             ViewMode = PickerViewMode.List,
         };
         picker.FileTypeFilter.Add(".zip");
-        if (App.MainWindow is not null)
-        {
-            var handle = WindowNative.GetWindowHandle(App.MainWindow);
-            InitializeWithWindow.Initialize(picker, handle);
-        }
+        var handle = WindowNative.GetWindowHandle(hostWindow);
+        InitializeWithWindow.Initialize(picker, handle);
 
         var file = await picker.PickSingleFileAsync();
         if (file is not null)

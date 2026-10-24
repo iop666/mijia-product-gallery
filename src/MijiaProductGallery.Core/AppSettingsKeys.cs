@@ -13,7 +13,6 @@ public static class AppSettingsKeys
 
     // 常规（首启声明与一次性提示）
     public const string LicenseAgreed = "General.LicenseAgreed";
-    public const string InitializationStarted = "General.InitializationStarted";
     public const string DragHintSeen = "General.DragHintSeen";
 
     // 图库（浏览模式与分页）

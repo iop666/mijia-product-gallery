@@ -278,24 +278,20 @@ public sealed class InitializationViewModelTests
     }
 
     [Fact]
-    public void MarkPending_ReturnsToIdle_WithoutRunningInitializer()
+    public void MarkFailed_ShowsErrorAndRetryAction()
     {
-        var initializer = new ScriptedInitializer(new InitializationReport
+        var vm = new InitializationViewModel(new ScriptedInitializer(new InitializationReport
         {
             Outcome = InitializationOutcome.AlreadyInitialized,
-        });
-        var calls = 0;
-        initializer.OnInitialize = _ => calls++;
-        var vm = new InitializationViewModel(initializer);
+        }));
 
-        vm.MarkPending("上次初始化未完成。请选择继续方式。");
+        vm.MarkFailed("初始化未完成。");
 
-        Assert.Equal(InitializationUiState.Idle, vm.State);
-        Assert.True(vm.IsIdle);
-        Assert.True(vm.IsActionable);
+        Assert.Equal(InitializationUiState.Failed, vm.State);
+        Assert.True(vm.HasError);
+        Assert.Equal("初始化未完成。", vm.ErrorMessage);
+        Assert.Equal("重试", vm.PrimaryActionText);
         Assert.True(vm.CanPickSeed);
-        Assert.Equal("开始初始化", vm.PrimaryActionText);
-        Assert.Equal(0, calls);
     }
 
     [Fact]

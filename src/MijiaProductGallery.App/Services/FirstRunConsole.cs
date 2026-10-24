@@ -134,7 +134,7 @@ public static class FirstRunConsole
             Foreground(ConsoleColor.Cyan, () => WriteLine($"    {dataRoot.RootPath}"));
             WriteLine(string.Empty);
             WriteLine("  说明：加载期间不显示应用界面，完成后自动进入图库。");
-            WriteLine("        请勿关闭本窗口，关闭会中止本次初始化；再次打开应用可手动继续。");
+            WriteLine("        请勿关闭本窗口：关闭会中止本次初始化，且不支持断点续传，再次打开应用将从头重新获取。");
             WriteLine("======================================================================");
         }
 

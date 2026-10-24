@@ -9,7 +9,7 @@ namespace MijiaProductGallery.ViewModels;
 /// <summary>初始化页状态。</summary>
 public enum InitializationUiState
 {
-    /// <summary>等待用户选择初始化方式（关闭页面/重启后不自动重跑）。</summary>
+    /// <summary>尚未开始初始化。</summary>
     Idle,
 
     /// <summary>初始化进行中。</summary>
@@ -49,7 +49,6 @@ public partial class InitializationViewModel : ObservableObject
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(
-        nameof(IsIdle),
         nameof(IsFailed),
         nameof(HasError),
         nameof(IsActionable),
@@ -75,9 +74,6 @@ public partial class InitializationViewModel : ObservableObject
     [ObservableProperty]
     private bool canPickSeed;
 
-    /// <summary>等待用户启动的可见性。</summary>
-    public bool IsIdle => State == InitializationUiState.Idle;
-
     /// <summary>失败态可见性（供 x:Bind 直绑）。</summary>
     public bool IsFailed => State == InitializationUiState.Failed;
 
@@ -87,24 +83,19 @@ public partial class InitializationViewModel : ObservableObject
     /// <summary>是否显示初始化方式按钮（等待启动或失败）。</summary>
     public bool IsActionable => State is InitializationUiState.Idle or InitializationUiState.Failed;
 
-    /// <summary>主按钮文案：首次启动用“开始初始化”，失败后用“重试”。</summary>
-    public string PrimaryActionText => State == InitializationUiState.Idle ? "开始初始化" : "重试";
+    /// <summary>主按钮文案。</summary>
+    public string PrimaryActionText => "重试";
 
-    /// <summary>页面重新打开或应用重启后回到待启动状态：不自动重跑，保留用户选择权。</summary>
-    public void MarkPending(string message)
+    /// <summary>控制台初始化失败后回到页面：展示错误并提供重试/选种子包入口。</summary>
+    public void MarkFailed(string message)
     {
         if (runInProgress)
         {
             return;
         }
 
-        State = InitializationUiState.Idle;
-        StageText = message;
-        ProgressValue = 0;
-        IsIndeterminate = false;
-        ErrorMessage = null;
-        AvailableActions = ["retry", "check-seed", "online-init"];
-        CanPickSeed = true;
+        StageText = "初始化未完成";
+        ShowFailure(message, ["retry", "check-seed", "online-init"]);
     }
 
     /// <summary>执行初始化。explicitSeedPath 非空时跳过自动查找。</summary>

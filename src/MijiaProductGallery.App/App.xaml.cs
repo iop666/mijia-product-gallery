@@ -127,6 +127,38 @@ public partial class App : Application
         // 缩略图参数：启动时从持久化设置加载（加载/更新都会写入共享 ThumbnailSettings）。
         await Services.GetRequiredService<ILibraryRuntimeOptions>().LoadAsync();
 
+        var settings = Services.GetRequiredService<ISettingsRepository>();
+        var hasProducts = await Services.GetRequiredService<IProductRepository>().CountAsync() > 0;
+        var licenseAgreed = await settings.GetValueAsync(AppSettingsKeys.LicenseAgreed, false);
+        if (!hasProducts || !licenseAgreed)
+        {
+            // 主窗口在首次许可/初始化完成前不创建：期间不会出现可切换的导航界面。
+            startupWindow = new Views.StartupWindow(
+                settings,
+                Services.GetRequiredService<IFirstRunInitializer>(),
+                Services.GetRequiredService<ISyncService>(),
+                Services.GetRequiredService<IAppDataRoot>(),
+                Services.GetRequiredService<InitializationViewModel>(),
+                needsInitialization: !hasProducts);
+            startupWindow.Ready += OnStartupReady;
+            startupWindow.Activate();
+            _ = startupWindow.StartAsync();
+            return;
+        }
+
+        OpenMainWindow();
+    }
+
+    private Views.StartupWindow? startupWindow;
+
+    private void OnStartupReady()
+    {
+        startupWindow = null;
+        OpenMainWindow();
+    }
+
+    private void OpenMainWindow()
+    {
         MainWindow = new MainWindow();
         MainWindow.Activate();
     }

@@ -1,6 +1,6 @@
 ﻿; 米家产品示例图库 安装包脚本（Inno Setup 6）
-; 构建示例：
-;   ISCC.exe /DPublishDir=D:\...\publish /DOutputDir=D:\...\0.2.1 installer.iss
+; 构建示例（PublishDir 必须指向 make-portable.ps1 生成的 staging\App）：
+;   ISCC.exe /DPublishDir=D:\...\0.2.4\staging\App /DOutputDir=D:\...\0.2.4 installer.iss
 
 #ifndef AppName
 #define AppName "米家产品示例图库"
@@ -9,13 +9,21 @@
 #define AppExeName "MijiaProductGallery.App.exe"
 #endif
 #ifndef AppVersion
-#define AppVersion "0.2.1"
+#define AppVersion "0.2.4"
 #endif
 #ifndef PublishDir
 #define PublishDir "publish"
 #endif
 #ifndef OutputDir
 #define OutputDir "Output"
+#endif
+
+; publish 原始目录不含 PRI/XBF，装出来的程序会启动即闪退；必须用 staging\App。
+#if !FileExists(AddBackslash(PublishDir) + "MijiaProductGallery.App.pri")
+  #error PublishDir 缺少 MijiaProductGallery.App.pri：请先运行 make-portable.ps1，并将 PublishDir 指向生成的 staging\App
+#endif
+#if !FileExists(AddBackslash(PublishDir) + "App.xbf")
+  #error PublishDir 缺少 App.xbf：请使用 make-portable.ps1 生成的 staging\App
 #endif
 
 [Setup]

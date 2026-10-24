@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Window
+    x:Class="MijiaProductGallery.App.Views.StartupWindow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    Title="米家产品示例图库">
+
+    <!-- 首次启动/未完成初始化的独立窗口：主界面完成前不创建，避免切换页面打断初始化 -->
+    <Grid x:Name="RootGrid" Background="{ThemeResource SolidBackgroundFillColorBaseBrush}">
+        <Grid x:Name="LicensePanel" Padding="36,28" RowSpacing="16">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+
+            <StackPanel Orientation="Horizontal" Spacing="12">
+                <Image Source="app.ico" Width="30" Height="30" />
+                <TextBlock
+                    Text="使用条款与免责声明"
+                    FontSize="22"
+                    FontWeight="SemiBold"
+                    VerticalAlignment="Center" />
+            </StackPanel>
+
+            <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+                <StackPanel Spacing="12" MaxWidth="640">
+                    <TextBlock
+                        Text="米家产品示例图库是一款开源的 Windows 桌面应用，源代码以 MIT 协议提供："
+                        TextWrapping="Wrap" />
+                    <HyperlinkButton
+                        Content="github.com/iop666/mijia-product-gallery"
+                        NavigateUri="https://github.com/iop666/mijia-product-gallery"
+                        Padding="0" />
+                    <TextBlock
+                        Text="本应用仅供个人学习、研究与软件测试使用，严禁商用。"
+                        TextWrapping="Wrap" />
+                    <TextBlock
+                        Text="运行时从米家百科公开产品库获取的产品信息与示例样图，版权归小米公司及相关权利人所有；使用远端内容须遵守相关法律法规及来源方的条款。"
+                        TextWrapping="Wrap" />
+                    <TextBlock
+                        Text="同意后开始初始化：应用会下载产品数据与示例样图（约 5-15 分钟，取决于网络速度）。初始化不支持断点续传，关闭加载窗口会导致下次启动从头重来。"
+                        TextWrapping="Wrap"
+                        Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                </StackPanel>
+            </ScrollViewer>
+
+            <StackPanel Grid.Row="2" Spacing="8">
+                <TextBlock
+                    x:Name="LicenseError"
+                    Foreground="{ThemeResource SystemFillColorCriticalBrush}"
+                    TextWrapping="Wrap"
+                    Visibility="Collapsed" />
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="10">
+                    <Button Content="不同意并退出" Click="OnDeclineClick" />
+                    <Button
+                        x:Name="AgreeButton"
+                        Content="同意并继续"
+                        Style="{StaticResource AccentButtonStyle}"
+                        Click="OnAgreeClick" />
+                </StackPanel>
+            </StackPanel>
+        </Grid>
+
+        <Grid x:Name="InitPanel" Visibility="Collapsed">
+            <ContentControl
+                x:Name="InitHost"
+                HorizontalContentAlignment="Stretch"
+                VerticalContentAlignment="Stretch" />
+        </Grid>
+    </Grid>
+</Window>
