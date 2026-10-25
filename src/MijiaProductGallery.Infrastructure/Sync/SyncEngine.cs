@@ -184,7 +184,8 @@ public sealed class SyncEngine(
             currentStage = SyncStage.DownloadingImages;
             await SetStageAsync(runId, SyncStage.DownloadingImages, cancellationToken);
             RaiseRunning(SyncStage.DownloadingImages, null, 0, 0, failures.Count, force: true);
-            using var reviews = await DownloadImageReviewsAsync(
+            CatalogDiff diff;
+            using (var reviews = await DownloadImageReviewsAsync(
                 remoteByModel,
                 local,
                 failures,
@@ -195,33 +196,36 @@ public sealed class SyncEngine(
                     total,
                     failureCount,
                     force: done >= total),
-                cancellationToken);
-            await AdoptVerifiedTimestampsAsync(local, remoteByModel, reviews.Inputs, cancellationToken);
-
-            var diff = ProductCompareRules.CompareCatalog(local, remote, reviews.Inputs);
-
-            currentStage = SyncStage.UpdatingDatabase;
-            await SetStageAsync(runId, SyncStage.UpdatingDatabase, cancellationToken);
-            RaiseRunning(SyncStage.UpdatingDatabase, $"变更 0/{diff.Changes.Count}", 0, diff.Changes.Count, failures.Count, force: true);
-            for (var changeIndex = 0; changeIndex < diff.Changes.Count; changeIndex++)
+                cancellationToken))
             {
-                var applied = await ApplyChangeAsync(diff.Changes[changeIndex], remoteByModel, reviews, storedImages, failures, cancellationToken);
-                if (applied is not null)
+                await AdoptVerifiedTimestampsAsync(local, remoteByModel, reviews.Inputs, cancellationToken);
+
+                diff = ProductCompareRules.CompareCatalog(local, remote, reviews.Inputs);
+
+                currentStage = SyncStage.UpdatingDatabase;
+                await SetStageAsync(runId, SyncStage.UpdatingDatabase, cancellationToken);
+                RaiseRunning(SyncStage.UpdatingDatabase, $"变更 0/{diff.Changes.Count}", 0, diff.Changes.Count, failures.Count, force: true);
+                for (var changeIndex = 0; changeIndex < diff.Changes.Count; changeIndex++)
                 {
-                    appliedChanges.Add(applied);
+                    var applied = await ApplyChangeAsync(diff.Changes[changeIndex], remoteByModel, reviews, storedImages, failures, cancellationToken);
+                    if (applied is not null)
+                    {
+                        appliedChanges.Add(applied);
+                    }
+
+                    RaiseRunning(
+                        SyncStage.UpdatingDatabase,
+                        $"变更 {changeIndex + 1}/{diff.Changes.Count}",
+                        changeIndex + 1,
+                        diff.Changes.Count,
+                        failures.Count,
+                        force: changeIndex + 1 >= diff.Changes.Count);
                 }
 
-                RaiseRunning(
-                    SyncStage.UpdatingDatabase,
-                    $"变更 {changeIndex + 1}/{diff.Changes.Count}",
-                    changeIndex + 1,
-                    diff.Changes.Count,
-                    failures.Count,
-                    force: changeIndex + 1 >= diff.Changes.Count);
+                await syncState.AddChangesAsync(runId, appliedChanges, cancellationToken);
             }
 
-            await syncState.AddChangesAsync(runId, appliedChanges, cancellationToken);
-
+            // 临时图片只在对比与落库阶段使用；缩略图阶段开始前释放，缩短硬终止时的残留窗口。
             currentStage = SyncStage.GeneratingThumbnails;
             await SetStageAsync(runId, SyncStage.GeneratingThumbnails, cancellationToken);
             await GenerateThumbnailsAsync(
@@ -357,8 +361,7 @@ public sealed class SyncEngine(
         var completed = 0;
         var total = reviewModels.Count;
         // 下载内容落临时文件而非驻留内存：首轮全量复核可达上万张，全部 byte[] 常驻会耗尽内存。
-        var tempDirectory = Path.Combine(Path.GetTempPath(), "MijiaProductGallery", $"sync-{Guid.NewGuid():N}");
-        Directory.CreateDirectory(tempDirectory);
+        var (tempDirectory, tempLock) = SyncTempDirectory.Create();
         var tempFiles = new ConcurrentDictionary<string, string>(StringComparer.Ordinal);
         var inputs = new ConcurrentDictionary<string, ImageReviewInput>(StringComparer.Ordinal);
         using var throttle = new SemaphoreSlim(ImageDownloadConcurrency, ImageDownloadConcurrency);
@@ -403,19 +406,13 @@ public sealed class SyncEngine(
         catch
         {
             // 取消/异常时本次复核结果作废，临时目录立即清理。
-            try
-            {
-                Directory.Delete(tempDirectory, recursive: true);
-            }
-            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
-            {
-            }
-
+            tempLock.Dispose();
+            SyncTempDirectory.Delete(tempDirectory, logger);
             throw;
         }
 
         onProgress(total, total, failures.Count);
-        return new ReviewOutcome(inputs, tempFiles, tempDirectory);
+        return new ReviewOutcome(inputs, tempFiles, tempDirectory, tempLock, logger);
     }
 
     /// <summary>
@@ -683,24 +680,18 @@ public sealed class SyncEngine(
         }
     }
 
-    /// <summary>复核结果：SHA 结论 + 落地到临时目录的图片；Dispose 时清空临时目录。</summary>
+    /// <summary>复核结果：SHA 结论 + 落地到临时目录的图片；Dispose 时释放锁并清空临时目录。</summary>
     private sealed record ReviewOutcome(
         ConcurrentDictionary<string, ImageReviewInput> Inputs,
         ConcurrentDictionary<string, string> TempFiles,
-        string TempDirectory) : IDisposable
+        string TempDirectory,
+        FileStream TempLock,
+        ILogger? Logger) : IDisposable
     {
         public void Dispose()
         {
-            try
-            {
-                if (Directory.Exists(TempDirectory))
-                {
-                    Directory.Delete(TempDirectory, recursive: true);
-                }
-            }
-            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
-            {
-            }
+            TempLock.Dispose();
+            SyncTempDirectory.Delete(TempDirectory, Logger);
         }
     }
 }

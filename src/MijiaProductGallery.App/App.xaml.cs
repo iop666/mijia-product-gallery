@@ -117,6 +117,10 @@ public partial class App : Application
         services.AddSingleton<SyncCenterViewModel>();
         Services = services.BuildServiceProvider();
 
+        // 回收上次进程被强杀（关闭初始化控制台/崩溃/断电）遗留的图片复核临时目录；
+        // 锁文件保证运行中的同步实例不受影响。后台执行，不拖慢启动。
+        _ = Task.Run(() => SyncTempDirectory.CleanupOrphans());
+
         // 灰色调色板按启动主题挂载/卸载（仅灰色模式有覆盖）。
         ThemePalette.Apply(initialTheme);
         ThemeManager.CurrentTheme = initialTheme;

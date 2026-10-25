@@ -4,7 +4,7 @@
     # 产物输出目录；默认为仓库同级 mijia-product-gallery-issue\<版本号>。
     [string]$OutRoot = '',
     # 发布版本号：决定默认输出目录、压缩包名与使用说明中的版本。
-    [string]$Version = '0.2.4'
+    [string]$Version = '0.2.5'
 )
 $ErrorActionPreference = 'Stop'
 $repoRoot = Split-Path -Parent $PSScriptRoot

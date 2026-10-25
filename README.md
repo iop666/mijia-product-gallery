@@ -145,7 +145,7 @@ dotnet build src/MijiaProductGallery.App -c Release
 ```
 
 - .NET 10 LTS + Windows App SDK 2.5.x（WinUI 3，unpackaged + SelfContained）
-- SQLite + EF Core · SkiaSharp（缩略图生成）· System.Text.Json · xUnit（412 项测试）
+- SQLite + EF Core · SkiaSharp（缩略图生成）· System.Text.Json · xUnit（448 项测试）
 - `tools/SeedPackTool`：开发期把 [mijia-product-icons](https://github.com/iop666/mijia-product-icons) 数据快照转换成 `seed-<日期>.zip` 初始数据包
 
 ---
